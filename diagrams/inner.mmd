@@ -1,0 +1,36 @@
+%%{init: {'theme':'neutral', 'flowchart':{'nodeSpacing':40,'rankSpacing':50,'curve':'basis'}}}%%
+flowchart LR
+    classDef pg     fill:#e7f5e7,stroke:#1f8a3a,color:#0b4d1a
+    classDef sw     fill:#fff7e0,stroke:#a8801f,color:#5b4500
+    classDef nic    fill:#eaf3ff,stroke:#1f5fa8,color:#0b3b78
+    classDef vm     fill:#ffe6e6,stroke:#a81f3a,color:#7a0b1a
+
+    owlOut[outer-workload-net<br/>192.168.3.x]:::pg
+    omnOut[outer-mgmt-net<br/>192.168.2.x]:::pg
+
+    subgraph nested["nested-esxi-N (e.g. 192.168.3.241)"]
+      vmnic0([vmnic0]):::nic
+      vmnic1([vmnic1]):::nic
+      vmnic2([vmnic2]):::nic
+
+      vSw0{{default vSwitch0}}:::sw
+      supDVS{{supervisor-dvs<br/>inner DVS}}:::sw
+
+      vmk0[vmk0<br/>192.168.3.24X]:::vm
+
+      supWL[sup-workload<br/>192.168.3.x]:::pg
+      supMgmt[sup-mgmt<br/>192.168.2.x]:::pg
+    end
+
+    cpEth1[CP VM eth1<br/>DHCP .3.201-230]:::vm
+    cpEth0[CP VM eth0<br/>.2.231 / .232 / .233]:::vm
+
+    owlOut --> vmnic0 --> vSw0 --> vmk0
+    owlOut --> vmnic1
+    omnOut --> vmnic2
+
+    vmnic1 -->|uplink1<br/>active for sup-workload| supDVS
+    vmnic2 -->|uplink2<br/>active for sup-mgmt| supDVS
+
+    supDVS --> supWL --> cpEth1
+    supDVS --> supMgmt --> cpEth0

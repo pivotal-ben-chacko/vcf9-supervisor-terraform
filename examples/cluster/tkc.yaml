@@ -1,0 +1,64 @@
+# Minimal TKG (Tanzu Kubernetes Grid) workload cluster spec.
+#
+# Apply against a Supervisor namespace AFTER kubectl vsphere login:
+#   kubectl config use-context test-ns
+#   kubectl apply -f tkc.yaml
+#
+# Adjust:
+#   - metadata.namespace   → your vSphere Namespace (default: test-ns)
+#   - topology.version     → an EXACT value from `kubectl get tkr`
+#   - controlPlane.replicas → 1 for lab, 3 for HA
+#   - workers.replicas      → worker node count
+#   - vmClass / storageClass → from `kubectl get virtualmachineclass`
+#                              and `kubectl get storageclass`
+#
+# See HOW-TO-CREATE-WORKLOAD-CLUSTER.md for full instructions +
+# troubleshooting.
+
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: tkc-01
+  namespace: test-ns
+spec:
+  clusterNetwork:
+    services:
+      cidrBlocks: ["10.96.0.0/16"]
+    pods:
+      cidrBlocks: ["10.244.0.0/16"]
+    serviceDomain: cluster.local
+
+  topology:
+    class: tanzukubernetescluster              # vSphere 9.0 built-in ClusterClass
+    version: v1.32.0+vmware.6-fips-vkr.2      # MUST match a `kubectl get tkr`
+
+    controlPlane:
+      replicas: 1                               # 3 for HA
+      metadata: {}
+
+    workers:
+      machineDeployments:
+        - class: node-pool
+          name: node-pool-1
+          replicas: 3
+          variables:
+            overrides:
+              - name: vmClass
+                value: best-effort-small
+              - name: storageClass
+                value: supervisor-storage
+
+    variables:
+      - name: vmClass
+        value: best-effort-small
+      - name: storageClass
+        value: supervisor-storage
+      - name: defaultStorageClass
+        value: supervisor-storage
+      # Add hostname(s) to the API server cert SANs so kubectl can connect
+      # via DNS name (e.g. https://workload.skynetsystems.io:6443) and
+      # validate TLS cleanly. The hostname(s) must also resolve to the
+      # cluster's API VIP (kubectl get cluster <name> -o jsonpath='{.spec.controlPlaneEndpoint}').
+      - name: kubeAPIServerFQDNs
+        value:
+          - workload.skynetsystems.io

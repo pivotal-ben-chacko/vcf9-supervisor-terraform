@@ -1,0 +1,18 @@
+# Terraform state and provider cache
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+crash.log
+crash.*.log
+
+# Secrets — never commit these
+secrets.auto.tfvars
+*.tfvars
+!*.tfvars.example
+
+# Generated artifacts
+modules/haproxy/generated/
+modules/supervisor/generated/
+modules/nested-esxi/generated/

@@ -1,0 +1,7 @@
+# Copy this file to terraform.tfvars (or leave secrets in secrets.auto.tfvars)
+# and fill in real values. NEVER commit either with real secrets.
+
+vcenter_server   = "vcenter.skynetsystems.io"
+vcenter_username = "administrator@vsphere.local"
+# vcenter_password = "..."   # put this in secrets.auto.tfvars
+# haproxy_password = "..."   # put this in secrets.auto.tfvars

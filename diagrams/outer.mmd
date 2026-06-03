@@ -1,0 +1,51 @@
+%%{init: {'theme':'neutral', 'flowchart':{'nodeSpacing':35,'rankSpacing':45,'curve':'basis'}}}%%
+flowchart TB
+    classDef subnet fill:#fff,stroke:#666,stroke-dasharray:5 5
+    classDef pnic   fill:#eaf3ff,stroke:#1f5fa8,color:#0b3b78
+    classDef sw     fill:#fff7e0,stroke:#a8801f,color:#5b4500
+    classDef pg     fill:#e7f5e7,stroke:#1f8a3a,color:#0b4d1a
+    classDef esxi   fill:#f3e8ff,stroke:#6b1fa8,color:#3a0b78
+    classDef vm     fill:#ffe6e6,stroke:#a81f3a,color:#7a0b1a
+
+    MGMT([mgmt subnet<br/>192.168.2.0/24]):::subnet
+    WL([workload subnet<br/>192.168.3.0/24]):::subnet
+
+    pnic0[pNIC vmnic0]:::pnic
+    pnic1[pNIC vmnic1]:::pnic
+
+    DSw{{DSwitch<br/>Distributed vSwitch}}:::sw
+    vSw1{{vSwitch1<br/>Standard vSwitch}}:::sw
+
+    dmgmtNet[outer-mgmt-net<br/>Accept/Accept/Accept]:::pg
+    dpgMgmt[dswitch-Management Network]:::pg
+    owl[outer-workload-net<br/>Accept/Accept/Accept]:::pg
+
+    vmk0[host vmk0<br/>192.168.2.75]:::vm
+
+    ne1[nested-esxi-1<br/>192.168.3.241]:::esxi
+    ne2[nested-esxi-2<br/>192.168.3.242]:::esxi
+    ne3[nested-esxi-3<br/>192.168.3.243]:::esxi
+
+    nfs[nfs VM<br/>192.168.3.244<br/>/srv/nfs/shared]:::vm
+    hap[haproxy VM<br/>192.168.3.245<br/>+VIPs .249-.254]:::vm
+
+    MGMT --> pnic0
+    WL --> pnic1
+    pnic0 --> DSw
+    pnic1 --> vSw1
+
+    DSw --> dpgMgmt
+    DSw --> dmgmtNet
+    vSw1 --> owl
+
+    dpgMgmt --> vmk0
+
+    owl --- ne1
+    owl --- ne2
+    owl --- ne3
+    dmgmtNet --- ne1
+    dmgmtNet --- ne2
+    dmgmtNet --- ne3
+
+    owl --- nfs
+    owl --- hap

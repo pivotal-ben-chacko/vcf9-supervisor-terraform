@@ -1,0 +1,67 @@
+{
+  "specVersion": "1.0",
+  "_comment": "Authoritative human-friendly Supervisor config for the Skynet lab. Edit this file, then run `make sync-config` from the repo root to regenerate terraform/examples/lab/config.auto.tfvars + the HAProxy cert. DO NOT hand-edit the generated tfvars.",
+  "supervisorSpec": {
+    "supervisorName": "Skynet"
+  },
+  "envSpec": {
+    "vcenterDetails": {
+      "vcenterAddress": "vcenter.skynetsystems.io",
+      "vcenterCluster": "Supervisor-Cluster"
+    }
+  },
+  "tkgsComponentSpec": {
+    "haProxyComponents": {
+      "haProxyName": "haproxy",
+      "haProxyUsername": "admin",
+      "haProxyControllerEndpoint": [
+        "192.168.3.245:5556"
+      ],
+      "haProxyVirtualIpAddressRanges": [
+        "192.168.3.249 - 192.168.3.254"
+      ],
+      "haProxyCertAuthorityChain": "-----BEGIN CERTIFICATE-----\nMIIFOzCCAyOgAwIBAgIUNpKElC5PqM1xuTHQADyK5/fGM9gwDQYJKoZIhvcNAQEL\nBQAwIDEQMA4GA1UEAwwHaGFwcm94eTEMMAoGA1UECgwDbGFiMB4XDTI2MDUyMDE5\nNTA1M1oXDTI4MDgyMjE5NTA1M1owIDEQMA4GA1UEAwwHaGFwcm94eTEMMAoGA1UE\nCgwDbGFiMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAnk6eio6bZqUl\nSM2fILKikSPNfo1l7aZZIqi0uOTKNyWJWXeTlPzfLWB6itjv1SZjtk2S80YyD5IX\njzpcc3rFnqx9JFj5IpBepgLr0NktFTeF1NeMxfrUWLyszqhzUwL+8GQrMRU0H9hN\ny5S7++LM/Rwv8u+/K0bTluVO2gausKGQH7LyqSQ/UjSVfNUD14jYtEfoYufRoHyp\ngmtwXKsNW0mchfJdlYThdHhTOzm0A8oijQVlVh+qM02mX0C0Yig7gldzHpHBmeUe\nedRojAJjNez9q2EMBholq5IdBFYkUSAdOYJT96UiAH1IVWf0FaabCLoKCYTXIfdH\nBBUlLWcE7qISS9q4d1RzoNkxLPNz2rYsoxsjPnZ8q8B7V6odH2BMNKmVTseaAy74\nEijctJ9iYLkliXh+BdyHcf6eTPExTGZX5Os8Jg4BDklxXRpWiTYxdNuGxy0LEvJ9\nynGuTiYh9mnGS/NACA9ZBlAnaQWEb978tvC5riQ18r0RQWMvS0nf5PJjEU6ZTMf7\nXzSZCdz9eLKyWZat5SEdgxJzXq6WzU3WC8JpYrQt7NhLBvS93fPWxvMjpzzkKJaW\nXMdtIVRJGGT4/iSCaBUGwFyppeO00fed8CtR5i4T7dCd5rOUNeT6e+i0dKoOknnS\nwkmTrv23FEcpmlJ/S2R0hsM6+8Ulj5UCAwEAAaNtMGswHQYDVR0OBBYEFC11yL0V\nUX8567B/g76fc4WQg5CgMB8GA1UdIwQYMBaAFC11yL0VUX8567B/g76fc4WQg5Cg\nMA8GA1UdEwEB/wQFMAMBAf8wGAYDVR0RBBEwD4cEwKgD9YIHaGFwcm94eTANBgkq\nhkiG9w0BAQsFAAOCAgEADoxpvmpB67eWpLRpEK3UikurRWJ8xC2URbEpd6vHIGP0\nKKaRZkN7WNoSiPRu/EMZj5RgmRepCTM+Hs+IVbQcQOxGFz7P29hl1s+LQ9Z6+Szt\nDlRAV0Efcpcj1Ho9mZ4+S/XeboQMMmbX0+Tbb4pJrzgfnwxIQfbl+BYbnlZT3RnD\ngIhl9WYIT8gG8sudwSKKWCgt/R9pqYFuyJk1mTI+WCSWdjLZsUw8cgt9Uc09AKxc\nGTI5sG8VVEhvvaeK8kiFClCh21emdNW8vxTxux6kJbVYMM9Q3vsXyE8at1016Zeo\nwOo303CXXLqRIMnRM0/CNjJUNb2me3WSfc5rC0TgwMOau5MRszrKIFyCouJ0T+oX\nF8jmsj9DBhkPuJXqVkjs9d8++mV2jd5gZOGekVGhDzyIl6hKIU03eB3NxF4DJOxj\nYcCeL+dy6FoTdCKVQmxul3zgllKF8QZwwzu0kj5zj4bITWaJzmU4kjhF7NFQ1/2+\nVxu7ipteHEhcReWjaxmOiiZaDTKZZDDPylaS1Skuwi2Ix3WebMl6Wn2tT78fhcNk\nS1lDLDFxzFxFmwf0ZTJLf1Ab/igebFJr4lIrpEn6qUPqtGZWOyh1x1UIS7A4z48g\nQflg6gp3hckLienx4ei0eoYWOm8bk+y+dhwkrxB0HF5v2yucV2eXxhvMYS4Ba3w=\n-----END CERTIFICATE-----\n"
+    },
+    "tkgsMgmtNetworkSpec": {
+      "_comment": "POST-PHASE-9 FIX: mgmt MUST be on a different subnet from workload. Originally this was on 192.168.3.x which hit Root Cause #6 (two NICs same subnet, kernel route ambiguity). Now lives on 192.168.2.x via the outer dswitch-vm port group.",
+      "tkgsMgmtIpAssignmentMode": "STATICRANGE",
+      "tkgsMgmtNetworkName": "sup-mgmt",
+      "tkgsMgmtNetworkGatewayCidr": "192.168.2.1/24",
+      "tkgsMgmtNetworkStartingIp": "192.168.2.231",
+      "tkgsMgmtNetworkDnsServers": [
+        "192.168.1.1"
+      ],
+      "tkgsMgmtNetworkSearchDomains": [],
+      "tkgsMgmtNetworkNtpServers": [
+        "pool.ntp.org"
+      ]
+    },
+    "tkgsStoragePolicySpec": {
+      "_comment": "Created by the Terraform supervisor module (vsphere_vm_storage_policy.supervisor_storage). Tag-based policy that resolves to the nfs-shared datastore.",
+      "masterStoragePolicy": "supervisor-storage",
+      "ephemeralStoragePolicy": "supervisor-storage",
+      "imageStoragePolicy": "supervisor-storage"
+    },
+    "tkgsPrimaryWorkloadNetwork": {
+      "tkgsPrimaryWorkloadIpAssignmentMode": "STATICRANGE",
+      "tkgsPrimaryWorkloadPortgroupName": "sup-workload",
+      "tkgsPrimaryWorkloadNetworkName": "sup-workload",
+      "tkgsPrimaryWorkloadNetworkGatewayCidr": "192.168.3.1/24",
+      "tkgsPrimaryWorkloadNetworkStartRange": "192.168.3.201",
+      "tkgsPrimaryWorkloadNetworkEndRange": "192.168.3.230",
+      "tkgsWorkloadDnsServers": [
+        "192.168.1.1"
+      ],
+      "tkgsWorkloadNtpServers": [
+        "pool.ntp.org"
+      ],
+      "tkgsWorkloadServiceCidr": "10.96.0.0/23"
+    },
+    "_controlPlaneComment": "TINY + HA off (cpvmCount=1) saves ~16 GiB RAM vs SMALL+3CPVMs. Sufficient for lab; switch to cpvmCount=3 for production HA.",
+    "controlPlaneSize": "TINY",
+    "apiServerDnsNames": [
+      "api.skynetsystems.io"
+    ],
+    "cpvmCount": 1
+  }
+}
