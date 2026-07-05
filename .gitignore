@@ -32,3 +32,7 @@ examples/avi-lb/generated/
 
 # Per-environment generated artifacts (TLS keys, enable specs with secrets)
 examples/*/generated/
+
+# Stray working artifacts (vendor OVF descriptor, OVF-env debug dump)
+controller.ovf
+haproxy-ovfenv.xml
