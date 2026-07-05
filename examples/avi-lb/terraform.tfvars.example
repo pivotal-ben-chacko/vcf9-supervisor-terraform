@@ -1,0 +1,36 @@
+# Copy to terraform.tfvars and fill in. Put SECRETS in secrets.auto.tfvars
+# instead (gitignored): vcenter_password, avi_admin_password,
+# avi_backup_passphrase.
+
+# ── vCenter ──
+vcenter_server   = "vcenter.skynetsystems.io"
+vcenter_username = "administrator@vsphere.local"
+# vcenter_password = "..."   # secrets.auto.tfvars
+
+# ── Placement (lab defaults) ──
+datacenter            = "Datacenter"
+physical_host_cluster = "Cluster"
+outer_datastore       = "datastore1"
+controller_network    = "outer-mgmt-net"   # management network (192.168.2.x)
+
+# ── OVA ──
+avi_ova_path = "../../controller-31.2.2-9059.ova"
+avi_version  = "31.2.2"
+
+# ── Controller identity ──
+controller_ip       = "192.168.2.240"
+controller_netmask  = "255.255.255.0"
+controller_gateway  = "192.168.2.1"
+controller_hostname = "avi-controller"
+
+# ── Admin + bootstrap (secrets in secrets.auto.tfvars) ──
+# avi_admin_password    = "..."   # >=8 chars, mixed case + digit + special
+# avi_backup_passphrase = "..."
+# avi_license_file      = "./avi-license.json"   # optional
+
+controller_dns_servers = ["192.168.2.1", "8.8.8.8"]
+controller_ntp_servers = ["162.159.200.1"]
+
+# Optional bigger footprint (OVA default is 6 vCPU / 32 GB):
+# controller_cpus      = 8
+# controller_memory_mb = 32768

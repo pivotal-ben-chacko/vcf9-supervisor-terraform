@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars; put secrets in secrets.auto.tfvars
+# (avi_password, vcenter_password).
+
+avi_controller_ip = "192.168.2.240"
+avi_username      = "admin"
+avi_version       = "31.2.2"
+# avi_password = "..."   # secrets.auto.tfvars (same as Stage 1 avi_admin_password)
+
+vcenter_server   = "vcenter.skynetsystems.io"
+vcenter_username = "administrator@vsphere.local"
+# vcenter_password = "..."   # secrets.auto.tfvars
+datacenter       = "Datacenter"
+
+cloud_name        = "Default-Cloud"
+se_mgmt_portgroup = "outer-mgmt-net"
+
+# VIP / data network (matches the HAProxy VIP pool so Supervisor specs line up)
+vip_portgroup    = "VM Network"
+vip_network_cidr = "192.168.3.0/24"
+vip_pool_start   = "192.168.3.249"
+vip_pool_end     = "192.168.3.254"
+
+se_group_name = "Default-Group"

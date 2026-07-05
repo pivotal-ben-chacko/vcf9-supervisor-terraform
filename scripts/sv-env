@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Source this:  . sv-env
+export GOVC_URL='vcenter.skynetsystems.io'
+export GOVC_USERNAME='administrator@vsphere.local'
+export GOVC_PASSWORD='Srosario1!'
+export GOVC_INSECURE=true

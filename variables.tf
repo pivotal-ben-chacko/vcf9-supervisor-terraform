@@ -281,6 +281,16 @@ variable "nfs_share_path" {
 }
 
 ###############################################################
+# Supervisor storage
+###############################################################
+
+variable "storage_tag_name" {
+  description = "Name of the vSphere tag (in the 'supervisor' category) attached to the nfs-shared datastore to drive the Supervisor storage policy."
+  type        = string
+  default     = "supervisor-storage"
+}
+
+###############################################################
 # Supervisor control plane
 ###############################################################
 

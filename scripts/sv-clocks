@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+. "$(dirname "$0")/sv-env"
+echo "Reference (UTC): $(date -u +%FT%TZ)"
+govc host.date.info -host /Datacenter/host/Cluster/192.168.2.75 2>/dev/null | head -4 | sed 's/^/  /'
+echo
+echo "vCSA timedatectl:"
+expect <<'EXP' 2>/dev/null | grep -E 'Local time|RTC|System clock' | sed 's/^/  /'
+log_user 1
+spawn ssh root@192.168.2.80
+expect "assword:"; send "Srosario1!\r"
+expect "Command>"; send "shell\r"; sleep 1
+send "timedatectl\r"; sleep 2
+send "exit\r"; expect "Command>"; send "exit\r"; expect eof
+EXP

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+. "$(dirname "$0")/sv-env"
+govc namespace.cluster.disable -cluster Supervisor-Cluster
+echo "Disable submitted. Bouncing wcp to actually move state..."
+"$(dirname "$0")/sv-wcp-restart"
+echo "Watch with: $(dirname "$0")/sv-state"

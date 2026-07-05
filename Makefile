@@ -1,21 +1,21 @@
 # Makefile for the Supervisor Terraform module.
 #
-# Run from the terraform/ directory:
-#   cd terraform && make help
+# Run from the repo root:
+#   make help
 #
-# (Or from anywhere with `make -C /path/to/repo/terraform <target>`)
+# (Or from anywhere with `make -C /path/to/repo <target>`)
 #
-# Paths in this Makefile are relative to terraform/:
+# Paths in this Makefile are relative to the repo root:
 #   examples/lab/        — the lab consumer example (where terraform runs)
-#   scripts/             — install-deps.sh, preflight-check.sh, json-to-tfvars.py
+#   scripts/             — install-deps.sh, preflight-check.sh, json-to-tfvars.py,
+#                          and the operational helpers (sv-state, sv-clocks, ...)
 #   modules/             — the modules themselves
-#   ../scripts/          — operational helper scripts (sv-state, sv-clocks, ...)
-#   ../SUPERVISOR-*.md   — docs (live at the repo root)
+#   SUPERVISOR-*.md      — docs
 
 TF_DIR      := examples/lab
 SCRIPTS_DIR := scripts
-SV_DIR      := ../scripts
-REPO_ROOT   := ..
+SV_DIR      := scripts
+REPO_ROOT   := .
 MD          := $(REPO_ROOT)/SUPERVISOR-SUMMARY.md
 PDF         := $(REPO_ROOT)/SUPERVISOR-SUMMARY.pdf
 
@@ -23,7 +23,7 @@ PDF         := $(REPO_ROOT)/SUPERVISOR-SUMMARY.pdf
 .DEFAULT_GOAL := help
 
 help:
-	@printf "Usage (run from terraform/):  make <target>\n\n"
+	@printf "Usage (run from the repo root):  make <target>\n\n"
 	@printf "Config sync (run after editing wcp-config-Skynet.json):\n"
 	@printf "  sync-config   regenerate examples/lab/config.auto.tfvars + haproxy-dpapi.crt\n\n"
 	@printf "Workflow (first-time deploy):\n"
@@ -41,7 +41,7 @@ help:
 	@printf "  apply         reconcile\n\n"
 	@printf "Teardown:\n"
 	@printf "  destroy       terraform destroy (disables Supervisor cleanly via destroy provisioners)\n\n"
-	@printf "Ops (calls ../scripts/sv-*):\n"
+	@printf "Ops (calls scripts/sv-*):\n"
 	@printf "  state         sv-state — quick health snapshot\n"
 	@printf "  clocks        sv-clocks — verify clock alignment (read-only diagnostic)\n"
 	@printf "  fix-ntp       sv-fix-ntp — *fix* clock skew (enable host NTP + sync vCSA)\n"

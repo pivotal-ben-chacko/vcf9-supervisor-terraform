@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+. "$(dirname "$0")/sv-env"
+
+echo "=== Supervisor cluster ==="
+govc namespace.cluster.ls -json 2>/dev/null | python3 -m json.tool 2>/dev/null
+
+echo
+echo "=== CP VMs ==="
+for vm in $(govc find /Datacenter/vm -type m -name 'SupervisorControlPlaneVM*' 2>/dev/null); do
+  ps=$(govc vm.info "$vm" 2>/dev/null | awk -F: '/Power state/{print $2}' | xargs)
+  ip=$(govc vm.info "$vm" 2>/dev/null | awk -F: '/IP address/{print $2}' | xargs)
+  printf "  %-50s  %-12s  %s\n" "$(basename "$vm")" "$ps" "$ip"
+done
+
+echo
+echo "=== HAProxy ==="
+hb=$(curl -sk -u admin:'Srosario1!' --max-time 4 \
+  https://192.168.3.245:5556/v2/services/haproxy/configuration/backends 2>/dev/null \
+  | python3 -c "import json,sys;print(len(json.load(sys.stdin).get('data',[])))" 2>/dev/null)
+echo "  backends: ${hb:-?}"
+
+echo
+echo "=== nested ESXi hosts ==="
+for h in 192.168.3.241 192.168.3.242 192.168.3.243; do
+  cs=$(govc host.info -host "/Datacenter/host/Supervisor-Cluster/$h" -json 2>/dev/null \
+    | python3 -c "import json,sys; print(json.load(sys.stdin)['hostSystems'][0]['runtime']['connectionState'])" 2>/dev/null)
+  printf "  %s  %s\n" "$h" "${cs:-?}"
+done

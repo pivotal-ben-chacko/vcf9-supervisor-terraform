@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Fetch the current CP VM root password via the vCSA shell.
+expect <<'EXP'
+set timeout 30
+log_user 0
+spawn ssh root@192.168.2.80
+expect "assword:"; send "Srosario1!\r"
+expect "Command>"; send "shell\r"; sleep 2
+log_user 1
+send "/usr/lib/vmware-wcp/decryptK8Pwd.py | grep -E '^(IP|PWD):'\r"
+expect -re "PWD: .*"
+sleep 1
+send "exit\r"; expect "Command>"; send "exit\r"; expect eof
+EXP

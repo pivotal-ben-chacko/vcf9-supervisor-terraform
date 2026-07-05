@@ -7,6 +7,11 @@ load balancer. Encodes every Phase 7.B / 10 / 11 lesson:
 - Phase 10 — systemd unit uses `-f` (dataplaneapi config) NOT `--config-file=` (HAProxy config)
 - Phase 11 — VIPs `.249–.254` claimed on `ens192` as `/32` secondaries (so the kernel actually answers ARP)
 
+> **How it actually works:** see [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) for
+> the end-to-end architecture — how the Supervisor programs HAProxy over
+> the Dataplane API, and how HAProxy applies config changes live (runtime
+> socket vs. seamless reload) without dropping traffic.
+
 ## What it does
 
 1. Generates a self-signed TLS cert for the Dataplane API

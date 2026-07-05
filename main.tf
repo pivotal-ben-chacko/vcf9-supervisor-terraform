@@ -120,6 +120,47 @@ module "network" {
   depends_on = [module.host_config]
 }
 
+###############################################################
+# Tag category + tag that drive the Supervisor storage policy.
+#
+# Created here (not in the supervisor module) because the nfs module
+# attaches the tag to the nfs-shared datastore natively via its `tags`
+# attribute, while the supervisor module builds the policy from the
+# names — putting the tag in either module would create a cycle.
+# Previously the tag lived in the supervisor module and was attached
+# out-of-band via a govc local-exec script; that left the attachment
+# invisible to Terraform, so any re-apply on an existing deployment
+# planned a tag detach that would have broken the storage policy.
+###############################################################
+
+resource "vsphere_tag_category" "supervisor" {
+  name        = "supervisor"
+  description = "Tag category for Supervisor storage policy"
+  cardinality = "SINGLE"
+
+  associable_types = [
+    "Datastore",
+  ]
+}
+
+resource "vsphere_tag" "supervisor_storage" {
+  name        = var.storage_tag_name
+  category_id = vsphere_tag_category.supervisor.id
+  description = "Datastores backing Supervisor (resolves to nfs-shared)"
+}
+
+# The tag resources used to live in modules/supervisor — migrate state
+# in place instead of destroy/recreate.
+moved {
+  from = module.supervisor.vsphere_tag_category.supervisor
+  to   = vsphere_tag_category.supervisor
+}
+
+moved {
+  from = module.supervisor.vsphere_tag.supervisor_storage
+  to   = vsphere_tag.supervisor_storage
+}
+
 # Phase 6 — NFS storage VM
 module "nfs" {
   source = "./modules/nfs"
@@ -139,6 +180,9 @@ module "nfs" {
 
   # Nested ESXi hosts that will mount the export as the "nfs-shared" datastore
   nested_host_ids = [for h in data.vsphere_host.nested : h.id]
+
+  # Tag the datastore so the supervisor module's storage policy resolves to it
+  supervisor_tag_id = vsphere_tag.supervisor_storage.id
 
   vcenter_server   = var.vcenter_server
   vcenter_username = var.vcenter_username
@@ -205,6 +249,11 @@ module "supervisor" {
   haproxy_user        = var.haproxy_username
   haproxy_password    = var.haproxy_password
   haproxy_cert_path   = module.haproxy.dataplaneapi_cert_path
+
+  # Referencing the resource attributes (not var.*) makes the policy
+  # depend on the tag actually existing.
+  storage_tag_category_name = vsphere_tag_category.supervisor.name
+  storage_tag_name          = vsphere_tag.supervisor_storage.name
 
   vip_pool = var.vip_pool
 

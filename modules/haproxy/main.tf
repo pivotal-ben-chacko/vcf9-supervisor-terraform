@@ -154,6 +154,17 @@ resource "vsphere_virtual_machine" "haproxy" {
     "guestinfo.userdata"          = base64encode(local.cloud_init)
     "guestinfo.userdata.encoding" = "base64"
   }
+
+  # vSphere reports io_reservation=1 / io_share_count=1000 on OVA-deployed
+  # disks regardless of what's applied, so these two diff on every plan
+  # (and via the supervisor module's depends_on, that noise cascades into
+  # an enable-spec replacement). Pin them.
+  lifecycle {
+    ignore_changes = [
+      disk[0].io_reservation,
+      disk[0].io_share_count,
+    ]
+  }
 }
 
 # The vmware/vsphere provider's ovf_deploy path leaves the VM powered

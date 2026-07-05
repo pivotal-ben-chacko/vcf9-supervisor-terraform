@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+H='https://192.168.3.245:5556'; U='admin:Srosario1!'
+
+echo "=== backends ==="
+curl -sk -u "$U" --max-time 4 "$H/v2/services/haproxy/configuration/backends" \
+  | python3 -c "import json,sys;[print('  '+b['name']) for b in json.load(sys.stdin)['data']]"
+
+echo
+echo "=== frontends + binds ==="
+for fe in $(curl -sk -u "$U" --max-time 4 "$H/v2/services/haproxy/configuration/frontends" \
+              | python3 -c "import json,sys;[print(b['name']) for b in json.load(sys.stdin)['data']]"); do
+  echo "  $fe"
+  curl -sk -u "$U" --max-time 4 "$H/v2/services/haproxy/configuration/binds?frontend=$fe" \
+    | python3 -c "
+import json,sys
+for b in json.load(sys.stdin).get('data', []):
+    print(f'    bind {b[\"address\"]}:{b[\"port\"]}')"
+done

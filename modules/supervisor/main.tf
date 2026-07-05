@@ -55,8 +55,14 @@ variable "storage_policy_name" {
   default     = "supervisor-storage"
 }
 
+variable "storage_tag_category_name" {
+  description = "Name of the tag category the storage-policy tag belongs to. Pass the category resource's .name attribute so the policy depends on it existing."
+  type        = string
+  default     = "supervisor"
+}
+
 variable "storage_tag_name" {
-  description = "Name of the tag (and category) created to drive the storage policy."
+  description = "Name of the tag that drives the storage policy. The tag itself is created in the root module and attached to nfs-shared natively by the nfs module."
   type        = string
   default     = "supervisor-storage"
 }
@@ -64,113 +70,21 @@ variable "storage_tag_name" {
 ###############################################################
 # Tag-based storage policy targeting nfs-shared
 # (Phase 8.0b in the runbook)
+#
+# The tag category + tag live in the root module, and the nfs module
+# attaches the tag to the nfs-shared datastore via its `tags`
+# attribute. This module only builds the policy from the names.
 ###############################################################
-
-data "vsphere_datastore" "nfs_shared" {
-  name          = "nfs-shared"
-  datacenter_id = var.datacenter_id
-}
-
-resource "vsphere_tag_category" "supervisor" {
-  name        = "supervisor"
-  description = "Tag category for Supervisor storage policy"
-  cardinality = "SINGLE"
-
-  associable_types = [
-    "Datastore",
-  ]
-}
-
-resource "vsphere_tag" "supervisor_storage" {
-  name        = var.storage_tag_name
-  category_id = vsphere_tag_category.supervisor.id
-  description = "Datastores backing Supervisor (resolves to nfs-shared)"
-}
-
-# vmware/vsphere provider doesn't have a standalone tag_assignment resource —
-# it expects tags to be set inline on resources Terraform manages. Since
-# nfs-shared is pre-existing (we deploy it via the nfs module but ESXi mounts
-# it as a datastore out-of-band), we use govc to attach the tag.
-resource "null_resource" "nfs_shared_tag" {
-  triggers = {
-    datastore_name = "nfs-shared"
-    tag_name       = vsphere_tag.supervisor_storage.name
-    datacenter     = var.datacenter
-    # Bump this whenever the local-exec command below changes — null_resource
-    # only re-runs when a trigger value changes, so script edits otherwise
-    # have no effect until you taint manually.
-    script_rev     = "2026-05-25-moref-via-ls-i"
-  }
-
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    environment = {
-      GOVC_URL      = var.vcenter_server
-      GOVC_USERNAME = var.vcenter_username
-      GOVC_PASSWORD = var.vcenter_password
-      GOVC_INSECURE = var.vcenter_insecure ? "true" : "false"
-    }
-    command = <<-EOT
-      # -eo (not -euo): with -u, bash 3.2 (macOS default) treats an empty
-      # array expansion as "unbound variable" and bails. We use such arrays
-      # for the optional --resolve flag, so -u doesn't fit here.
-      set -eo pipefail
-      DS_PATH="/${var.datacenter}/datastore/nfs-shared"
-      TAG="${vsphere_tag.supervisor_storage.name}"
-
-      # Resolve the datastore moref. `govc ls -i` outputs:
-      #   Datastore:datastore-NNN /Datacenter/datastore/nfs-shared
-      # — first whitespace-delimited field. Earlier we used
-      # `govc object.collect -s "$DS_PATH"` which dumps every property
-      # of the object; head -1 returned literal "true" (a boolean field),
-      # not a moref, so the verify loop never matched.
-      MOREF=""
-      for try in 1 2 3; do
-        MOREF=$(govc ls -i "$DS_PATH" 2>/dev/null | awk '{print $1}')
-        [ -n "$MOREF" ] && break
-        sleep 5  # datastore just mounted, give vSphere a moment
-      done
-      if [ -z "$MOREF" ]; then
-        echo "ERROR: could not resolve moref for $DS_PATH" >&2
-        exit 1
-      fi
-
-      # Skip if tag already attached (tags.attached.ls outputs Datastore:datastore-NNN)
-      if govc tags.attached.ls "$TAG" 2>/dev/null | grep -qF "$MOREF"; then
-        echo "tag '$TAG' already on nfs-shared ($MOREF)"
-        exit 0
-      fi
-
-      # Attach + verify with retries (datastore tag-index may lag mount-time)
-      for i in 1 2 3 4 5; do
-        govc tags.attach "$TAG" "$DS_PATH" 2>&1 || true
-        sleep 2
-        if govc tags.attached.ls "$TAG" 2>/dev/null | grep -qF "$MOREF"; then
-          echo "tag '$TAG' attached to nfs-shared on try $i ($MOREF)"
-          exit 0
-        fi
-      done
-      echo "ERROR: tag attach did not stick after 5 retries" >&2
-      exit 1
-    EOT
-  }
-
-  # MUST also depend on the datastore actually being mounted, not just the tag
-  # existing. The caller threads vsphere_nas_datastore in via var.datastore_dependency.
-  depends_on = [vsphere_tag.supervisor_storage]
-}
 
 resource "vsphere_vm_storage_policy" "supervisor_storage" {
   name        = var.storage_policy_name
   description = "Tag-based policy that resolves to nfs-shared (for Supervisor CP/ephemeral/image storage)"
 
   tag_rules {
-    tag_category                 = vsphere_tag_category.supervisor.name
-    tags                         = [vsphere_tag.supervisor_storage.name]
+    tag_category                 = var.storage_tag_category_name
+    tags                         = [var.storage_tag_name]
     include_datastores_with_tags = true
   }
-
-  depends_on = [null_resource.nfs_shared_tag]
 }
 
 ###############################################################

@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# sv-fix-ntp — fix the clock skew issue (Root Cause #3 / Phase 8).
+#
+# Three things must happen, in order:
+#   1. Set NTP server on the PHYSICAL ESXi host
+#   2. Enable + start the ntpd service on that host
+#   3. Force the vCSA's running kernel clock to catch up to its RTC
+#      (which is now correct because the host is now correct)
+#
+# Idempotent: re-running is safe. Reads current state first; only
+# changes what's not already correct.
+#
+# Usage:    ./scripts/sv-fix-ntp
+# Env:      NTP_SERVER=162.159.200.1   (default: time.cloudflare.com anycast IP)
+#           PHYSICAL_HOST_PATH=/Datacenter/host/Cluster/192.168.2.75
+#           VCSA_MGMT_IP=192.168.2.80
+#           VCSA_ROOT_PASSWORD=…       (or sourced from sv-env)
+
+set -euo pipefail
+
+# Pull GOVC_* env from sv-env if not already set
+if [[ -z "${GOVC_PASSWORD:-}" ]]; then
+  source "$(dirname "$0")/sv-env"
+fi
+
+NTP_SERVER="${NTP_SERVER:-162.159.200.1}"
+PHYSICAL_HOST_PATH="${PHYSICAL_HOST_PATH:-/Datacenter/host/Cluster/192.168.2.75}"
+VCSA_MGMT_IP="${VCSA_MGMT_IP:-192.168.2.80}"
+VCSA_ROOT_PASSWORD="${VCSA_ROOT_PASSWORD:-$GOVC_PASSWORD}"
+
+ok()   { printf "  \033[32m✓\033[0m %s\n" "$1"; }
+do_()  { printf "  \033[36m▸\033[0m %s\n" "$1"; }
+warn() { printf "  \033[33m!\033[0m %s\n" "$1"; }
+fail() { printf "  \033[31m✗\033[0m %s\n" "$1" >&2; }
+
+#───────────────────────────────────────────────────────────────────────
+# Step 1: NTP server configured on the physical ESXi host
+#───────────────────────────────────────────────────────────────────────
+printf "\n\033[1m== Step 1: NTP server on physical host ==\033[0m\n"
+printf "  Host:    %s\n" "$PHYSICAL_HOST_PATH"
+printf "  NTP IP:  %s  (override with NTP_SERVER=...)\n\n" "$NTP_SERVER"
+
+CURRENT_NTP=$(govc host.date.info -host "$PHYSICAL_HOST_PATH" 2>/dev/null \
+  | awk -F: '/NTP servers/{print $2}' | xargs)
+
+if [[ "$CURRENT_NTP" == "$NTP_SERVER" ]]; then
+  ok "NTP server already set to $NTP_SERVER"
+else
+  do_ "setting NTP server to $NTP_SERVER (was: ${CURRENT_NTP:-none})"
+  govc host.date.change -host "$PHYSICAL_HOST_PATH" -server "$NTP_SERVER"
+  ok "set"
+fi
+
+#───────────────────────────────────────────────────────────────────────
+# Step 2: ntpd service enabled and running
+# NOTE: host.service ignores -host on its own; must use GOVC_HOST env var.
+#───────────────────────────────────────────────────────────────────────
+printf "\n\033[1m== Step 2: ntpd service ==\033[0m\n"
+
+NTP_STATUS=$(govc host.date.info -host "$PHYSICAL_HOST_PATH" 2>/dev/null \
+  | awk -F: '/NTP service status/{print $2}' | xargs)
+
+if [[ "$NTP_STATUS" == "Running" ]]; then
+  ok "ntpd already Running"
+else
+  do_ "enabling + starting ntpd (was: $NTP_STATUS)"
+  GOVC_HOST="$PHYSICAL_HOST_PATH" govc host.service enable ntpd >/dev/null
+  GOVC_HOST="$PHYSICAL_HOST_PATH" govc host.service start  ntpd >/dev/null
+  sleep 2
+  NEW_STATUS=$(govc host.date.info -host "$PHYSICAL_HOST_PATH" 2>/dev/null \
+    | awk -F: '/NTP service status/{print $2}' | xargs)
+  if [[ "$NEW_STATUS" == "Running" ]]; then
+    ok "ntpd Running"
+  else
+    fail "ntpd still not running (state=$NEW_STATUS) — check ESXi service logs"
+    exit 1
+  fi
+fi
+
+#───────────────────────────────────────────────────────────────────────
+# Step 3: Force vCSA's running kernel clock to catch up to its RTC
+#
+# When the host's clock jumps forward, the RTC of every VM running on
+# that host gets updated automatically by ESXi. But the VM's *running
+# kernel* doesn't notice — it has its own monotonic clock that only
+# moves forward incrementally. Linux's `hwclock --hctosys` reads the
+# RTC into the running kernel.
+#───────────────────────────────────────────────────────────────────────
+printf "\n\033[1m== Step 3: Force vCSA kernel clock sync ==\033[0m\n"
+printf "  vCSA:    root@%s  (force running clock = RTC)\n\n" "$VCSA_MGMT_IP"
+
+# Compare local UTC against vCSA's kernel clock; only run hwclock if drifted
+LOCAL_UTC_EPOCH=$(date -u +%s)
+
+VCSA_OUTPUT=$(VCSA_PWD="$VCSA_ROOT_PASSWORD" VCSA_IP="$VCSA_MGMT_IP" \
+expect <<'EXP' 2>/dev/null
+log_user 1
+set timeout 30
+set pwd $env(VCSA_PWD)
+set ip  $env(VCSA_IP)
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$ip
+expect "assword:"; send "$pwd\r"
+expect "Command>"; send "shell\r"
+sleep 1
+send "date -u +%s; echo END_EPOCH\r"
+expect "END_EPOCH"
+send "exit\r"; expect "Command>"; send "exit\r"; expect eof
+EXP
+)
+
+VCSA_EPOCH=$(echo "$VCSA_OUTPUT" | grep -oE '^[0-9]{10}$' | head -1 || echo 0)
+SKEW=$((LOCAL_UTC_EPOCH - VCSA_EPOCH))
+ABS_SKEW=${SKEW#-}
+
+printf "  Local UTC:  %s (epoch %s)\n" "$(date -u)" "$LOCAL_UTC_EPOCH"
+printf "  vCSA   UTC: epoch %s (skew=%ss)\n" "${VCSA_EPOCH:-?}" "$SKEW"
+
+if [[ $ABS_SKEW -le 5 ]]; then
+  ok "vCSA kernel clock within 5s of UTC — no action needed"
+else
+  do_ "vCSA kernel skew=${SKEW}s — forcing hwclock --hctosys to catch up"
+
+  VCSA_PWD="$VCSA_ROOT_PASSWORD" VCSA_IP="$VCSA_MGMT_IP" \
+  expect <<'EXP' 2>/dev/null | grep -E 'before|after|date' || true
+log_user 1
+set timeout 30
+set pwd $env(VCSA_PWD)
+set ip  $env(VCSA_IP)
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$ip
+expect "assword:"; send "$pwd\r"
+expect "Command>"; send "shell\r"; sleep 1
+send "echo before; date -u; hwclock --hctosys --utc; echo after; date -u\r"
+expect "after"; sleep 1
+send "exit\r"; expect "Command>"; send "exit\r"; expect eof
+EXP
+
+  ok "hwclock sync done"
+fi
+
+#───────────────────────────────────────────────────────────────────────
+# Final verification
+#───────────────────────────────────────────────────────────────────────
+printf "\n\033[1m== Verification ==\033[0m\n"
+govc host.date.info -host "$PHYSICAL_HOST_PATH" | sed 's/^/  /'
+
+printf "\n\033[32mNTP fix complete.\033[0m If WCP was wedged due to clock skew, give it ~30-60s to recover\n"
+printf "on its next retry cycle. You can monitor with:\n"
+printf "    tail -f  ←  ssh root@%s and tail /storage/log/vmware/wcp/wcpsvc.log\n" "$VCSA_MGMT_IP"
+printf "    sv-state                                       (cluster status)\n\n"

@@ -24,6 +24,10 @@ variable "nested_host_ids" {
   description = "ID list of nested ESXi hosts that should mount the NFS export as a datastore."
   type        = list(string)
 }
+variable "supervisor_tag_id" {
+  description = "vSphere tag ID to attach to the datastore so the Supervisor tag-based storage policy resolves to it. Managed natively here (not via govc) so re-applies don't plan a tag detach."
+  type        = string
+}
 # Credentials for the post-deploy power-on local-exec
 variable "vcenter_server" {}
 variable "vcenter_username" {}
@@ -97,6 +101,19 @@ resource "vsphere_virtual_machine" "nfs" {
     "guestinfo.userdata"          = base64encode(local.cloud_init)
     "guestinfo.userdata.encoding" = "base64"
   }
+
+  # vSphere reports io_reservation=1 / io_share_count=1000 on OVA-deployed
+  # disks regardless of what's applied, so these two diff on every plan
+  # (and via the supervisor module's depends_on, that noise cascades into
+  # an enable-spec replacement). Pin them.
+  lifecycle {
+    ignore_changes = [
+      disk[0].io_reservation,
+      disk[0].io_share_count,
+      disk[1].io_reservation,
+      disk[1].io_share_count,
+    ]
+  }
 }
 
 # The vmware/vsphere provider's ovf_deploy path leaves the VM powered
@@ -156,6 +173,10 @@ resource "vsphere_nas_datastore" "nfs_shared" {
   type            = "NFS"
   remote_hosts    = [var.ip_addr]
   remote_path     = var.share_path
+
+  # The supervisor module's tag-based storage policy resolves to this
+  # datastore through this tag.
+  tags = [var.supervisor_tag_id]
 
   depends_on = [null_resource.wait_for_nfs_export]
 }

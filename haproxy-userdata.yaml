@@ -1,0 +1,58 @@
+#cloud-config
+hostname: haproxy
+manage_etc_hosts: true
+
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    plain_text_passwd: Srosario1!
+    shell: /bin/bash
+ssh_pwauth: true
+chpasswd:
+  expire: false
+
+write_files:
+  - path: /etc/netplan/60-static.yaml
+    permissions: '0600'
+    content: |
+      network:
+        version: 2
+        ethernets:
+          primary:
+            match:
+              name: en*
+            dhcp4: false
+            addresses: [192.168.3.245/24]
+            routes:
+              - to: default
+                via: 192.168.3.1
+            nameservers:
+              addresses: [192.168.3.1, 8.8.8.8]
+  - path: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+    content: |
+      network: {config: disabled}
+  - path: /etc/sysctl.d/99-haproxy.conf
+    content: |
+      # allow HAProxy to bind to non-local IPs (VIPs)
+      net.ipv4.ip_nonlocal_bind = 1
+      net.ipv4.ip_forward = 1
+
+package_update: true
+packages:
+  - haproxy
+  - openssl
+  - jq
+  - curl
+  - open-vm-tools
+  - net-tools
+  - ca-certificates
+
+runcmd:
+  - rm -f /etc/netplan/50-cloud-init.yaml
+  - chmod 600 /etc/netplan/60-static.yaml
+  - netplan apply
+  - sysctl --system
+  - systemctl enable open-vm-tools
+
+final_message: "haproxy VM base ready — IP 192.168.3.245, awaiting dataplane API setup"

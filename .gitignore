@@ -16,3 +16,16 @@ secrets.auto.tfvars
 modules/haproxy/generated/
 modules/supervisor/generated/
 modules/nested-esxi/generated/
+examples/avi-lb/generated/
+
+# Avi/NSX-ALB Controller OVA — large (~5 GB), licensed, don't commit
+*.ova
+
+# vSphere install media — large, licensed, keep local only
+*.iso
+
+# macOS cruft
+.DS_Store
+
+# Local Claude Code settings
+.claude/

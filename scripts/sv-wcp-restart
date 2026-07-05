@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Hard restart the wcp service on the vCSA. Use when supervisor enable/disable
+# is stuck and `service-control --restart` doesn't appear to take effect.
+expect <<'EXP'
+set timeout 120
+spawn ssh root@192.168.2.80
+expect "assword:"; send "Srosario1!\r"
+expect "Command>"; send "shell\r"; sleep 2
+send "service-control --stop wcp; sleep 3; pkill -9 -f wcpsvc 2>/dev/null; service-control --start wcp\r"
+expect "Successfully started"
+sleep 2
+send "exit\r"; expect "Command>"; send "exit\r"; expect eof
+EXP
+echo "wcp restarted."
