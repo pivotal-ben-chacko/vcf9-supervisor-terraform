@@ -262,10 +262,16 @@ module "nested_esxi" {
   network_dswitch_vm_id = data.vsphere_network.outer_dswitch_vm.id
 
   root_password = var.nested_esxi_root_password
+  # hostname must be set and unique per host: spherelet's client cert
+  # identity (system:node:<hostname>) and its K8s Node name both derive
+  # from it. Hosts installed with the ESXi default ("localhost") all
+  # collide on the same identity and NodeRestriction blocks node
+  # registration — see TROUBLESHOOTING.md "Supervisor ESXi nodes never
+  # join". FQDNs match what the live hosts were renamed to on 2026-07-05.
   hosts = [
-    { name = "nested-esxi-1", ip = "192.168.3.241" },
-    { name = "nested-esxi-2", ip = "192.168.3.242" },
-    { name = "nested-esxi-3", ip = "192.168.3.243" },
+    { name = "nested-esxi-1", ip = "192.168.3.241", hostname = "nested-esxi-1.skynetsystems.io" },
+    { name = "nested-esxi-2", ip = "192.168.3.242", hostname = "nested-esxi-2.skynetsystems.io" },
+    { name = "nested-esxi-3", ip = "192.168.3.243", hostname = "nested-esxi-3.skynetsystems.io" },
   ]
 }
 
