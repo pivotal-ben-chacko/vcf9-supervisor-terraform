@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" xmlns:ve="http://www.vmware.com/schema/ovfenv" oe:id="" ve:vCenterId="">
+  <PlatformSection>
+    <Kind>VMware ESXi</Kind>
+    <Version>9.0.2</Version>
+    <Vendor>VMware, Inc.</Vendor>
+    <Locale>en</Locale>
+  </PlatformSection>
+  <PropertySection>
+    <Property oe:key="appliance.root_pwd" oe:value="Srosario1!"/>
+    <Property oe:key="appliance.permit_root_login" oe:value="True"/>
+    <Property oe:key="appliance.ca_cert" oe:value=""/>
+    <Property oe:key="appliance.ca_cert_key" oe:value=""/>
+    <Property oe:key="network.hostname" oe:value="haproxy"/>
+    <Property oe:key="network.nameservers" oe:value="192.168.3.1, 8.8.8.8"/>
+    <Property oe:key="network.management_ip" oe:value="192.168.3.245/24"/>
+    <Property oe:key="network.management_gateway" oe:value="192.168.3.1"/>
+    <Property oe:key="network.workload_ip" oe:value="192.168.3.246/24"/>
+    <Property oe:key="network.workload_gateway" oe:value="192.168.3.1"/>
+    <Property oe:key="network.frontend_ip" oe:value=""/>
+    <Property oe:key="network.frontend_gateway" oe:value=""/>
+    <Property oe:key="network.additional_workload_networks" oe:value=""/>
+    <Property oe:key="loadbalance.service_ip_range" oe:value="192.168.3.248/29"/>
+    <Property oe:key="loadbalance.dataplane_port" oe:value="5556"/>
+    <Property oe:key="loadbalance.haproxy_user" oe:value="admin"/>
+    <Property oe:key="loadbalance.haproxy_pwd" oe:value="Srosario1!"/>
+  </PropertySection>
+  <ve:EthernetAdapterSection>
+    <ve:Adapter ve:mac="00:50:56:8e:98:56" ve:network="VM Network" ve:unitNumber="7"/>
+    <ve:Adapter ve:mac="00:50:56:8e:1f:2b" ve:network="VM Network" ve:unitNumber="8"/>
+  </ve:EthernetAdapterSection>
+</Environment>

@@ -198,8 +198,12 @@ locals {
   })
 }
 
+# path.cwd (the consuming example's directory) rather than path.module:
+# each environment keeps its own spec + api-endpoint file. With
+# path.module, two environments sharing this module would overwrite
+# each other's generated files.
 resource "local_file" "enable_spec" {
-  filename = "${path.module}/generated/enable-spec.json"
+  filename = "${path.cwd}/generated/enable-spec.json"
   content  = local.enable_spec
   file_permission = "0600"
 }
@@ -295,7 +299,7 @@ resource "null_resource" "supervisor_enable" {
       fi
 
       echo "Polling status (this takes 15-30 min for HA-off, longer for HA on)..."
-      mkdir -p "${path.module}/generated"
+      mkdir -p "${path.cwd}/generated"
       # Tolerate transient ERROR flickers: vSphere's reconcile loop can
       # briefly mark the cluster ERROR while replaying a content-library
       # update / API call retry, then recover to CONFIGURING and eventually
@@ -311,7 +315,7 @@ resource "null_resource" "supervisor_enable" {
           # it can differ across re-enables). Downstream outputs read this file.
           echo "$RESP" \
             | python3 -c "import json,sys; print(json.load(sys.stdin).get('api_server_cluster_endpoint',''))" \
-            > "${path.module}/generated/api-endpoint.txt"
+            > "${path.cwd}/generated/api-endpoint.txt"
           exit 0
         fi
         if [[ "$STATUS" == "ERROR" ]]; then
@@ -426,7 +430,7 @@ output "enable_spec_path" {
 # config_status == RUNNING. May change across destroy/re-enable cycles
 # (HAProxy picks an IP from the VIP pool).
 data "local_file" "api_endpoint" {
-  filename   = "${path.module}/generated/api-endpoint.txt"
+  filename   = "${path.cwd}/generated/api-endpoint.txt"
   depends_on = [null_resource.supervisor_enable]
 }
 

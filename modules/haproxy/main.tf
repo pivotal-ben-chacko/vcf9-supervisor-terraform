@@ -43,25 +43,29 @@ resource "null_resource" "generate_dpapi_cert" {
     interpreter = ["/bin/bash", "-c"]
     command = <<-EOT
       set -euo pipefail
-      mkdir -p ${path.module}/generated
+      # path.cwd (the consuming example's directory, e.g. examples/lab)
+      # rather than path.module: each environment gets its own cert.
+      # With path.module, two environments sharing this module would
+      # overwrite each other's cert and cross-contaminate their VMs.
+      mkdir -p ${path.cwd}/generated
       openssl req -x509 -newkey rsa:4096 -nodes \
-        -keyout ${path.module}/generated/dpapi.key \
-        -out    ${path.module}/generated/dpapi.crt \
+        -keyout ${path.cwd}/generated/dpapi.key \
+        -out    ${path.cwd}/generated/dpapi.crt \
         -days 825 \
         -subj "/CN=haproxy/O=lab" \
         -addext "subjectAltName=IP:${var.ip_addr},DNS:haproxy" 2>/dev/null
-      chmod 600 ${path.module}/generated/dpapi.key
+      chmod 600 ${path.cwd}/generated/dpapi.key
     EOT
   }
 }
 
 data "local_file" "dpapi_cert" {
-  filename   = "${path.module}/generated/dpapi.crt"
+  filename   = "${path.cwd}/generated/dpapi.crt"
   depends_on = [null_resource.generate_dpapi_cert]
 }
 
 data "local_file" "dpapi_key" {
-  filename   = "${path.module}/generated/dpapi.key"
+  filename   = "${path.cwd}/generated/dpapi.key"
   depends_on = [null_resource.generate_dpapi_cert]
 }
 

@@ -29,3 +29,6 @@ examples/avi-lb/generated/
 
 # Local Claude Code settings
 .claude/
+
+# Per-environment generated artifacts (TLS keys, enable specs with secrets)
+examples/*/generated/

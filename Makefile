@@ -12,7 +12,8 @@
 #   modules/             — the modules themselves
 #   SUPERVISOR-*.md      — docs
 
-TF_DIR      := examples/lab
+# Override for other environments: make TF_DIR=examples/lab2 plan
+TF_DIR      ?= examples/lab
 SCRIPTS_DIR := scripts
 SV_DIR      := scripts
 REPO_ROOT   := .
