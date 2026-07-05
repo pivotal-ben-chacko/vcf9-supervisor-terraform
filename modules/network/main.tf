@@ -18,6 +18,28 @@ variable "vcenter_username" {}
 variable "vcenter_password" { sensitive = true }
 variable "vcenter_insecure" { type = bool }
 
+variable "host_mgmt_vmk_ips" {
+  description = <<-EOT
+    Management-subnet IP per nested host (keyed by host name) for a
+    vmkernel NIC on the sup-host-mgmt port group. Gives each host a
+    directly-connected, symmetric path to the Supervisor control plane's
+    floating management IP. Without it, spherelet traffic sourced from
+    the host's workload-subnet vmk0 reaches the CP VM's eth0 while the
+    CP's reverse route points at eth1, and strict rp_filter on the CP
+    VMs drops it — ESXi nodes then never join the cluster (see
+    TROUBLESHOOTING.md, "Supervisor ESXi nodes never join"). Empty map
+    disables.
+  EOT
+  type    = map(string)
+  default = {}
+}
+
+variable "host_mgmt_netmask" {
+  description = "Netmask for the host management vmkernel NICs."
+  type        = string
+  default     = "255.255.255.0"
+}
+
 ###############################################################
 # supervisor-dvs — Distributed Virtual Switch spanning the
 # nested ESXi cluster.
@@ -82,8 +104,49 @@ resource "vsphere_distributed_port_group" "sup_mgmt" {
 }
 
 ###############################################################
+# sup-host-mgmt port group + per-host vmkernel NICs — pinned to
+# uplink2 like sup-mgmt, but reserved for host vmkernel traffic.
+#
+# No gateway is set on these vmks: the hosts' default route stays on
+# vmk0 (workload subnet); the vmk only adds a connected route to the
+# management /24 so spherelet → CP-floating-IP traffic is L2-direct
+# and symmetric (no rp_filter dependence on the CP VMs).
+###############################################################
+
+resource "vsphere_distributed_port_group" "sup_host_mgmt" {
+  count = length(var.host_mgmt_vmk_ips) > 0 ? 1 : 0
+
+  name                            = "sup-host-mgmt"
+  distributed_virtual_switch_uuid = vsphere_distributed_virtual_switch.supervisor_dvs.id
+  vlan_id                         = 0
+
+  active_uplinks  = ["uplink2"]
+  standby_uplinks = []
+}
+
+resource "vsphere_vnic" "host_mgmt" {
+  for_each = var.host_mgmt_vmk_ips
+
+  host                    = var.nested_hosts[each.key].id
+  distributed_switch_port = vsphere_distributed_virtual_switch.supervisor_dvs.id
+  distributed_port_group  = vsphere_distributed_port_group.sup_host_mgmt[0].key
+
+  ipv4 {
+    ip      = each.value
+    netmask = var.host_mgmt_netmask
+  }
+
+  netstack = "defaultTcpipStack"
+}
+
+###############################################################
 # Outputs
 ###############################################################
+
+output "host_mgmt_vmk_ids" {
+  description = "vmkernel NIC IDs per host (empty when host_mgmt_vmk_ips is unset)."
+  value       = { for name, v in vsphere_vnic.host_mgmt : name => v.id }
+}
 
 output "sup_mgmt_portgroup_id" {
   value = vsphere_distributed_port_group.sup_mgmt.id

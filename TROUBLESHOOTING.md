@@ -847,9 +847,15 @@ done
 
 > ⚠️ **Not persistent.** This is a live sysctl on VMware-managed VMs; a
 > CP VM reboot or redeploy (upgrade, HA event) reverts it. If this
-> warning ever returns, re-check rp_filter first. A durable alternative
-> is a vmkernel NIC on the management subnet for each nested host, so
-> the spherelet path is symmetric — not yet implemented in the module.
+> warning ever returns, re-check rp_filter first.
+
+**Durable fix (applied 2026-07-05):** the `network` module now creates a
+`sup-host-mgmt` port group and a management-subnet vmkernel NIC per
+nested host (`192.168.2.241-243`, `nested_host_mgmt_ips` variable at the
+root). With a connected route to `192.168.2.0/24`, spherelet sources its
+traffic from the host's `.2.x` vmk and the CP's reply routes back out
+eth0 — symmetric, so rp_filter can stay at its default. The sysctl
+workaround above is only needed on deployments without those vmks.
 
 ### Cause 2 — every spherelet identity is `system:node:localhost` (certificate/hostname)
 

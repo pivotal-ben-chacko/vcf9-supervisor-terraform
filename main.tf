@@ -112,6 +112,9 @@ module "network" {
   outer_vm_network_id = data.vsphere_network.outer_vm_network.id
   outer_dswitch_vm_id = data.vsphere_network.outer_dswitch_vm.id
 
+  # Per-host vmkernel NICs on the management subnet (spherelet path fix)
+  host_mgmt_vmk_ips = var.nested_host_mgmt_ips
+
   vcenter_server   = var.vcenter_server
   vcenter_username = var.vcenter_username
   vcenter_password = var.vcenter_password

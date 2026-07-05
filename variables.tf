@@ -65,6 +65,16 @@ variable "nested_esxi_hosts" {
   default     = ["192.168.3.241", "192.168.3.242", "192.168.3.243"]
 }
 
+variable "nested_host_mgmt_ips" {
+  description = "Management-subnet vmkernel IP per nested host (keyed by host name). Gives spherelet a symmetric L2 path to the Supervisor CP floating IP — without it, strict rp_filter on the CP VMs drops host traffic and ESXi nodes never join (TROUBLESHOOTING.md, 'Supervisor ESXi nodes never join'). Set {} to disable."
+  type        = map(string)
+  default = {
+    "192.168.3.241" = "192.168.2.241"
+    "192.168.3.242" = "192.168.2.242"
+    "192.168.3.243" = "192.168.2.243"
+  }
+}
+
 variable "outer_vm_network_portgroup" {
   description = "Name of the outer (physical-host) port group used by nested ESXi vmnic1 for the workload subnet. Default = the lab's existing 'VM Network'. For fresh deploys via the physical-network module, use 'outer-workload-net'."
   type        = string
