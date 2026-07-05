@@ -769,6 +769,149 @@ resolves correctly and that you can reach the vCenter UI.
 
 ---
 
+## Supervisor ESXi nodes never join ("No node is accepting vSphere Pods")
+
+**Symptom (hit 2026-07-05):** `config_status: RUNNING` but
+`kubernetes_status: WARNING` with *"No node on Supervisor
+'Supervisor-Cluster' is accepting vSphere Pods"*. `kubectl get nodes`
+shows only the three control-plane nodes — no `agent` (ESXi) nodes.
+`govc host.service.ls` shows spherelet Running on every host, so the
+service itself isn't the problem.
+
+Two independent root causes stacked. Fix them in order — the second is
+invisible until the first is resolved (spherelet has to reach the API
+before the API can reject it).
+
+Useful access for everything below:
+
+```bash
+# CP VM root password + floating mgmt IP, from the vCSA:
+./scripts/sv-cp-pwd            # prints IP: 192.168.2.231, PWD: <17 chars>
+
+# kubectl runs on the CP VM:
+ssh root@192.168.2.231 'kubectl get nodes -o wide'
+
+# SSH to a nested ESXi host (off by default):
+GOVC_HOST=/Datacenter/host/Supervisor-Cluster/192.168.3.241 \
+  govc host.service start TSM-SSH
+```
+
+### Cause 1 — CP VM rp_filter drops spherelet traffic (asymmetric reverse path)
+
+With control-plane HA (3 CP VMs), WCP points spherelet at the **floating
+management IP** (`192.168.2.231`) instead of the workload-side HAProxy
+VIP it uses with HA off. Spherelet packets from the ESXi hosts
+(`192.168.3.x`) arrive on the CP VM's **eth0**, but the CP VM's route
+back to `192.168.3.x` is via its own **eth1** (policy routing table
+200). With strict reverse-path filtering (`rp_filter=1`, the Photon
+default) the kernel silently drops every such packet — no reply, no
+log, nothing.
+
+**Diagnostic:**
+
+```bash
+# 1. WCP log on the vCSA: the node config loop completes every step,
+#    then waits forever ("Nodes retrieved: ... Items:[]"). It also
+#    reveals which masterIP spherelet was given:
+grep -iE 'spherelet' /storage/log/vmware/wcp/wcpsvc.log | tail -25
+#    → "setting spherelet localhost config to masterIP=192.168.2.231"
+
+# 2. Spherelet log on a nested ESXi host:
+tail /var/log/spherelet.log
+#    → "dial tcp 192.168.2.231:6443: i/o timeout" on every API call
+
+# 3. Reachability matrix from the ESXi host — routing in general works,
+#    ONLY the floating CP IP is dead. From the Mac the same IP answers.
+#    That asymmetry (works from LAN1, dead from LAN3) is the tell:
+vmkping -c2 192.168.2.1      # LAN2 gateway    → OK
+vmkping -c2 192.168.2.80     # vCSA            → OK
+vmkping -c2 192.168.2.231    # CP floating IP  → 100% loss
+
+# 4. Confirm on the CP VM currently holding the floating IP:
+ip -br addr                            # .231/32 is a secondary on eth0
+ip route get 192.168.3.241             # → dev eth1   ← reverse-path mismatch
+sysctl net.ipv4.conf.eth0.rp_filter    # → 1 (strict)
+```
+
+**Fix** — loose rp_filter on **all three** CP VMs (the floating IP can
+move between them):
+
+```bash
+for ip in 192.168.2.232 192.168.2.233 192.168.2.234; do
+  ssh root@$ip 'sysctl -w net.ipv4.conf.all.rp_filter=2 \
+                          -w net.ipv4.conf.eth0.rp_filter=2'
+done
+```
+
+`vmkping 192.168.2.231` from the ESXi host succeeds immediately after.
+
+> ⚠️ **Not persistent.** This is a live sysctl on VMware-managed VMs; a
+> CP VM reboot or redeploy (upgrade, HA event) reverts it. If this
+> warning ever returns, re-check rp_filter first. A durable alternative
+> is a vmkernel NIC on the management subnet for each nested host, so
+> the spherelet path is symmetric — not yet implemented in the module.
+
+### Cause 2 — every spherelet identity is `system:node:localhost` (certificate/hostname)
+
+The nested ESXi hosts were installed with hostname `localhost` (never
+set after kickstart). WCP builds each spherelet client certificate from
+the host's hostname, so **all three hosts** received the same identity,
+`CN=system:node:localhost`. Kubernetes' NodeRestriction admission only
+lets `system:node:X` manage the Node object named `X`, so every
+registration attempt is forbidden.
+
+**Diagnostic:**
+
+```bash
+# 1. Spherelet log on the host — the giveaway (appears only once
+#    Cause 1 is fixed and the API is reachable):
+grep forbidden /var/log/spherelet.log | tail -1
+#  → nodes "192.168.3.241" is forbidden: node "localhost" is not
+#    allowed to modify node "192.168.3.241"
+
+# 2. Certificate identity on the host:
+openssl x509 -in /etc/vmware/spherelet/client.crt -noout -subject
+#  → CN = system:node:localhost
+
+# 3. Hostname:
+esxcli system hostname get      # → Host Name: localhost
+```
+
+**Fix** — per host: set a unique hostname, remove the old certs to
+force re-issue, restart spherelet (WCP re-runs its CSR flow on the next
+reconcile — no vCenter-side action needed):
+
+```bash
+# On the ESXi host (repeat per host, incrementing the name):
+esxcli system hostname set --host=nested-esxi-1 --domain=skynetsystems.io
+mkdir -p /tmp/spherelet-cert-backup
+mv /etc/vmware/spherelet/{client.crt,client.key,spherelet.crt,server.key,kubelet-*} \
+   /tmp/spherelet-cert-backup/
+
+# From the admin machine:
+GOVC_HOST=/Datacenter/host/Supervisor-Cluster/192.168.3.241 \
+  govc host.service restart spherelet
+```
+
+Within ~2 minutes the cert is re-issued with the node name baked in
+(`CN = system:node:nested-esxi-1.skynetsystems.io`) and the host shows
+up in `kubectl get nodes` as `Ready` with role `agent`. The node is
+named after the FQDN, so it follows the hostname you set.
+
+If a host's spherelet crash-loops with `unable to read client-cert
+/etc/vmware/spherelet/client.crt` before WCP has re-issued the certs,
+restart the spherelet service again — the WCP reconcile and the service
+start raced.
+
+**Verify:**
+
+```bash
+ssh root@192.168.2.231 'kubectl get nodes'    # 3 masters + 3 agents, all Ready
+./scripts/sv-state                            # kubernetes_status leaves WARNING
+```
+
+---
+
 ## Diagnostic command cheatsheet
 
 ```sh
