@@ -73,7 +73,12 @@ Secrets go in `secrets.auto.tfvars` (never committed — see step 3).
 **In the lab-2 vCenter:**
 
 - [ ] Datacenter, both clusters, physical host, and datastore exist
-  under the names configured above.
+  under the names configured above. **Terraform creates none of
+  these** — every `datacenter` / `*_cluster` / `*_host` / `*_datastore`
+  variable is a lookup of existing inventory, and `plan` fails if a
+  name doesn't match. In particular, create the Supervisor cluster and
+  join the three nested hosts to it by hand (vSphere Client → New
+  Cluster → drag hosts in, or `govc cluster.create` + `govc cluster.add`).
 - [ ] Port groups `VM Network` and `outer-mgmt-net` exist on the
   physical host (Terraform sets their security flags — you don't need
   to).

@@ -160,8 +160,12 @@ variable "physical_host_cluster" {
   default = "Cluster" # CHANGE-ME: cluster containing the physical host
 }
 variable "supervisor_cluster" {
+  # NOT created by Terraform — this is a lookup. Create the cluster in
+  # the lab-2 vCenter and join the three nested hosts to it BEFORE
+  # running terraform; this name must match that cluster's inventory
+  # name exactly (CHANGE-ME if you named it something else).
   type    = string
-  default = "Supervisor-Cluster" # CHANGE-ME if named differently
+  default = "Supervisor-Cluster"
 }
 variable "nested_esxi_hosts" {
   description = "vCenter inventory names of the nested hosts (typically their IPs)."
