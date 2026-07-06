@@ -109,19 +109,19 @@ All paths relative to the repo root
 ```bash
 # 0. FIRST: verify each nested host has a unique hostname — ESXi
 #    installs default to "localhost", which silently breaks spherelet
-#    node registration (§2 / TROUBLESHOOTING.md). Check each host:
-for h in 192.168.1.241 192.168.1.242 192.168.1.243; do
-  ssh root@$h 'esxcli system hostname get'
-done
-#    If any shows "localhost", set a unique name (increment per host):
-ssh root@192.168.1.241 'esxcli system hostname set --host=nested-esxi-1 --domain=<lab2-domain>'
-ssh root@192.168.1.242 'esxcli system hostname set --host=nested-esxi-2 --domain=<lab2-domain>'
-ssh root@192.168.1.243 'esxcli system hostname set --host=nested-esxi-3 --domain=<lab2-domain>'
-#    (If SSH is disabled on a host, enable it via govc against the
-#     lab-2 vCenter first:
+#    node registration (§2 / TROUBLESHOOTING.md). The helper script
+#    checks and only sets when needed (idempotent, safe to re-run):
+cd ~/Repos/vcf9-supervisor-terraform
+SSHPASS='<esxi root password>' ./scripts/sv-set-hostnames -d <lab2-domain> \
+  192.168.1.241=nested-esxi-1 \
+  192.168.1.242=nested-esxi-2 \
+  192.168.1.243=nested-esxi-3
+#    (Omit SSHPASS to be prompted per host. If SSH is disabled on a
+#     host, enable it via govc against the lab-2 vCenter first:
 #       GOVC_HOST=/<datacenter>/host/<supervisor-cluster>/<host-ip> \
 #         govc host.service start TSM-SSH
-#     — or use the DCUI/host client.)
+#     — or use the DCUI/host client. Equivalent manual command:
+#       ssh root@<host> 'esxcli system hostname set --host=<name> --domain=<domain>')
 
 cd ~/Repos/vcf9-supervisor-terraform/examples/lab2
 

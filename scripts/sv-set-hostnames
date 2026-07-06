@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# sv-set-hostnames — verify/set unique hostnames on ESXi hosts.
+#
+# ESXi installs default to hostname "localhost". On a Supervisor
+# cluster that breaks spherelet node registration: every host gets the
+# same client-cert identity (system:node:localhost) and Kubernetes'
+# NodeRestriction refuses the Node objects. See TROUBLESHOOTING.md →
+# "Supervisor ESXi nodes never join".
+#
+# Idempotent: reads the current hostname first and only sets it when
+# it differs. Safe to re-run.
+#
+# Usage:
+#   ./scripts/sv-set-hostnames [-d <domain>] <host-ip>=<short-name> [...]
+#
+# Examples (lab2):
+#   ./scripts/sv-set-hostnames -d lab2.example.com \
+#     192.168.1.241=nested-esxi-1 \
+#     192.168.1.242=nested-esxi-2 \
+#     192.168.1.243=nested-esxi-3
+#
+# Auth: prompts for each host's root password, or set SSHPASS and have
+# sshpass installed for non-interactive runs:
+#   SSHPASS='<esxi root pw>' ./scripts/sv-set-hostnames ...
+#
+# If SSH is disabled on a host, enable it first (against that lab's
+# vCenter):  GOVC_HOST=/<dc>/host/<cluster>/<ip> govc host.service start TSM-SSH
+
+set -euo pipefail
+
+DOMAIN=""
+while getopts "d:h" opt; do
+  case "$opt" in
+    d) DOMAIN="$OPTARG" ;;
+    h) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) exit 1 ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if [ $# -eq 0 ]; then
+  echo "usage: $0 [-d <domain>] <host-ip>=<short-name> [...]" >&2
+  echo "run with -h for details" >&2
+  exit 1
+fi
+
+SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=8 -o LogLevel=ERROR)
+
+run_ssh() { # run_ssh <ip> <command>
+  if [ -n "${SSHPASS:-}" ] && command -v sshpass >/dev/null; then
+    sshpass -e ssh "${SSH_OPTS[@]}" "root@$1" "$2"
+  else
+    ssh "${SSH_OPTS[@]}" "root@$1" "$2"
+  fi
+}
+
+rc=0
+for pair in "$@"; do
+  ip="${pair%%=*}"
+  name="${pair#*=}"
+  if [ -z "$ip" ] || [ -z "$name" ] || [ "$ip" = "$name" ]; then
+    echo "✗ bad argument '$pair' — expected <host-ip>=<short-name>" >&2
+    rc=1
+    continue
+  fi
+
+  want_fqdn="$name${DOMAIN:+.$DOMAIN}"
+  current=$(run_ssh "$ip" "esxcli system hostname get" 2>/dev/null \
+    | awk -F': ' '/Fully Qualified Domain Name/{print $2}' | tr -d ' \r') || {
+    echo "✗ $ip: SSH failed (is TSM-SSH running? password correct?)" >&2
+    rc=1
+    continue
+  }
+
+  if [ "$current" = "$want_fqdn" ]; then
+    echo "✓ $ip: already '$current' — no change"
+    continue
+  fi
+
+  echo "  $ip: '$current' → '$want_fqdn'"
+  if run_ssh "$ip" "esxcli system hostname set --host='$name' ${DOMAIN:+--domain='$DOMAIN'}"; then
+    echo "✓ $ip: set to '$want_fqdn'"
+    if [ "$current" = "localhost" ]; then
+      echo "  ⚠ $ip: was 'localhost'. If spherelet already ran on this host, its"
+      echo "    cert identity is stale — clear /etc/vmware/spherelet/{*.crt,*.key,*.pem}"
+      echo "    and restart spherelet AFTER Supervisor enable (see TROUBLESHOOTING.md)."
+    fi
+  else
+    echo "✗ $ip: hostname set failed" >&2
+    rc=1
+  fi
+done
+exit $rc
