@@ -48,6 +48,18 @@ Secrets go in `secrets.auto.tfvars` (never committed — see step 3).
 
 **On the nested ESXi hosts (do this FIRST):**
 
+- [ ] **Each nested ESXi VM exposes hardware virtualization (VHV).**
+  Edit Settings → CPU → check **"Expose hardware assisted
+  virtualization to the guest OS"** (VM must be powered off; or
+  `govc vm.change -vm <vm-path> -nested-hv-enabled=true`). Without it
+  the host boots and joins vCenter normally, but **every VM it tries
+  to power on fails** with *"This host does not support Intel VT-x
+  ... VHV disabled"* — first the vCLS VMs, later the Supervisor
+  control plane. (Terraform-built hosts get this automatically via
+  `nested_hv_enabled = true` in the nested-esxi module; hand-built
+  VMs must set it manually.) Tip: do it in the same power-off window
+  as the vNIC additions below.
+
 - [ ] **Set a unique hostname on each host** — see §2a below for the
   exact commands. ESXi defaults to `localhost`; with that, every
   spherelet receives the same client-cert identity
