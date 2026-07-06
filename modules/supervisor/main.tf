@@ -171,8 +171,14 @@ locals {
       load_balancer_config_spec = {
         id       = "haproxy-lab"
         provider = "HA_PROXY"
+        # First usable IP of the pool, derived from var.vip_pool. This was
+        # previously hardcoded to lab 1's "192.168.3.249", which silently
+        # poisoned any environment with a different VIP pool: the Supervisor
+        # allocated its API endpoint (and Pinniped callback) from a range
+        # HAProxy never claimed. cidrhost(pool, 1) yields the same string
+        # for lab 1, so its enable-spec hash is unchanged.
         address_ranges = [
-          { address = "192.168.3.249", count = local.vip_pool_count }
+          { address = cidrhost(var.vip_pool, 1), count = local.vip_pool_count }
         ]
         ha_proxy_config_create_spec = {
           servers = [
