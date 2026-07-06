@@ -54,9 +54,37 @@ Secrets go in `secrets.auto.tfvars` (never committed — see step 3).
   (`system:node:localhost`) and Kubernetes blocks node registration —
   the cluster comes up with zero worker nodes. See `TROUBLESHOOTING.md`
   → "Supervisor ESXi nodes never join".
-- [ ] Each host has **three vNICs**: vmnic0 + vmnic1 on the outer
-  `VM Network`, vmnic2 on the outer `outer-mgmt-net` path. ESXi does
-  not detect hot-added NICs — power-cycle after adding.
+- [ ] Each nested ESXi VM has **three network adapters**, in this
+  exact order (vmnic numbering follows adapter order, and the module
+  pins DVS uplinks by vmnic name — get the order wrong and Supervisor
+  traffic exits the wrong subnets):
+
+  | Adapter | Becomes | Port group | Role |
+  |---|---|---|---|
+  | 1 | vmnic0 | `VM Network` | host management (vmk0) |
+  | 2 | vmnic1 | `VM Network` | DVS uplink1 → workload |
+  | 3 | vmnic2 | `outer-mgmt-net` | DVS uplink2 → management |
+
+  **To add/fix via the vSphere Client**, per nested VM:
+
+  1. Right-click the VM → **Edit Settings**.
+  2. If an existing adapter 2 points at `outer-mgmt-net`, **change it
+     to `VM Network`** (safe while nothing claims vmnic1 — no vmk, no
+     DVS yet).
+  3. **Add New Device → Network Adapter** → port group
+     `outer-mgmt-net`, type **VMXNET 3**, "Connect At Power On"
+     checked → OK.
+  4. **Full power-cycle the VM** — a guest reboot does NOT reveal
+     hot-added NICs (ESXi skips the PCI rescan; runbook Root Cause
+     #7): host → Maintenance Mode → Enter, VM → Power Off → Power On,
+     wait for the host to reconnect, exit Maintenance Mode. One host
+     at a time.
+  5. **Verify the mapping by MAC** (the host can't show outer port
+     groups): Edit Settings lists each adapter's MAC; compare with
+     host → Configure → Networking → Physical adapters (or
+     `govc host.esxcli -host=<host-path> network nic list`). vmnic1's
+     MAC must be the `VM Network` adapter, vmnic2's the
+     `outer-mgmt-net` one.
 - [ ] Expected host networking at this stage (naming trap): the host's
   own **"Management Network"** (`vmk0` on `vSwitch0`/vmnic0) lives on
   the **workload** CIDR — `192.168.1.24x` — because that's the host's
@@ -262,6 +290,37 @@ govc find /Datacenter/host/Supervisor-Cluster -type h
 
 The vLCM image assignment and the two HA advanced options still need
 the UI / pyvmomi as noted above.
+
+### If you hit "vSphere HA agent is not reachable from vCenter"
+
+Common right after this phase (maintenance-mode exits, hostname
+changes, and fresh clocks all upset the FDM agent). In order:
+
+1. Right-click the host → **Reconfigure for vSphere HA**; repeat per
+   affected host. Fixes most cases — especially after the §2a hostname
+   change.
+2. Still broken → cluster → vSphere Availability → HA **off**, wait
+   for the unconfigure tasks, HA **on** (clean agent reinstall).
+3. Check clocks — HA's SSL sessions fail *silently* on skew, and
+   hand-installed ESXi often ships with NTP off:
+
+   ```bash
+   for h in 192.168.1.241 192.168.1.242 192.168.1.243; do
+     govc host.date.info -host /Datacenter/host/Supervisor-Cluster/$h | grep -E 'Current|NTP'
+     govc host.date.change -host /Datacenter/host/Supervisor-Cluster/$h -server 162.159.200.1
+     GOVC_HOST=/Datacenter/host/Supervisor-Cluster/$h govc host.service enable ntpd
+     GOVC_HOST=/Datacenter/host/Supervisor-Cluster/$h govc host.service start  ntpd
+   done
+   ```
+
+   Compare with the vCSA's own clock too (VAMI → Time).
+4. Last resort: `ssh root@<host> '/etc/init.d/vmware-fdm restart'` and
+   read `/var/log/fdm.log` — the error line names the cause.
+
+(The *"insufficient heartbeat datastores"* warning is a different,
+expected alarm until Terraform mounts `nfs-shared` — step 4's advanced
+option silences it. The *agent not reachable* error, by contrast, must
+be resolved before Supervisor enable.)
 
 **Don't** configure networking on the cluster beyond this — the
 `supervisor-dvs`, port groups, uplinks, and vmkernel NICs are all
