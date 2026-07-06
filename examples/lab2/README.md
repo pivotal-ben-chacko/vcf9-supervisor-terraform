@@ -19,7 +19,7 @@ land in `examples/lab2/generated/`, separate from lab 1's.
 
 | Variable | What to set it to |
 |---|---|
-| `vcenter_server` | FQDN of the lab-2 vCenter. Must resolve to the vCSA's IP from this machine — verify with `dscacheutil -q host -a name <fqdn>` (macOS), not just `dig` |
+| `vcenter_server` | The lab-2 vCSA's system name (PNID) — FQDN **or IP**, whichever it was deployed with (the CN of its TLS cert tells you). If an FQDN: it must resolve to the vCSA's IP from this machine — verify with `dscacheutil -q host -a name <fqdn>` (macOS), not just `dig`. If an IP: use it as-is; this also sidesteps DNS-hijack risk entirely |
 | `datacenter` | Datacenter name in the lab-2 vCenter (default `Datacenter`) |
 | `physical_host_name` | The physical host's **inventory name** in vCenter — typically its IP |
 | `physical_host_cluster` | Cluster containing the physical host (default `Cluster`) |

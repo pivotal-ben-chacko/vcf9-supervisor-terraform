@@ -144,8 +144,12 @@ variable "haproxy_password" {
 
 # ── vCenter / inventory (CHANGE-ME: must match the new site) ──
 variable "vcenter_server" {
+  # The lab-2 vCSA's system name (PNID) — an FQDN or an IP, whichever
+  # the vCSA was deployed with (check: the CN of the cert on :443).
+  # If the PNID is an IP, use the IP here; that also removes the
+  # DNS-hijack failure mode entirely (see TROUBLESHOOTING.md → DNS).
   type    = string
-  default = "CHANGE-ME.vcenter.fqdn"
+  default = "CHANGE-ME" # FQDN or IP of the lab-2 vCenter
 }
 variable "datacenter" {
   type    = string
