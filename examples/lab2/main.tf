@@ -168,9 +168,15 @@ variable "supervisor_cluster" {
   default = "Supervisor-Cluster"
 }
 variable "nested_esxi_hosts" {
-  description = "vCenter inventory names of the nested hosts (typically their IPs)."
-  type        = list(string)
-  default     = ["192.168.1.241", "192.168.1.242", "192.168.1.243"]
+  # These are vCenter INVENTORY names — the exact string each host was
+  # registered with when added to vCenter. README §2b adds hosts by IP,
+  # so IPs are correct here; if you add them by FQDN instead, put the
+  # FQDNs here. NOTE: this is independent of the esxcli hostname set in
+  # step 0 (that drives spherelet's cert identity / K8s node name;
+  # setting it does NOT rename the vCenter inventory object). The
+  # nested_host_mgmt_ips map keys must match these values.
+  type    = list(string)
+  default = ["192.168.1.241", "192.168.1.242", "192.168.1.243"]
 }
 variable "outer_datastore" {
   type    = string
