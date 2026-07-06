@@ -121,19 +121,35 @@ cluster.
    | vSphere DRS | **On**, automation level **Fully Automated** | Supervisor requires DRS to place CP/pod VMs |
    | vSphere HA | **On** (admission control on) | Supervisor requires HA |
    | vSAN | **Off** | we use the NFS datastore instead |
-   | "Manage all hosts with a single image" (vLCM) | **On**, image = **the exact ESXi version the nested hosts run** | Supervisor enable pushes the cluster image to hosts; a mismatched image fails with `Cannot download VIB` (runbook Root Causes #1–2) |
 
-   If the hosts' ESXi version isn't offered in the image dropdown,
-   first import the matching offline depot: **Lifecycle Manager →
-   Actions → Import Updates**, then Cluster → Updates → Image → Edit.
-   Target state: **"All hosts compliant."**
+   (Don't look for a "Manage all hosts with a single image" checkbox —
+   that's the vSphere 7/8 wizard. In vSphere 9, image-based lifecycle
+   management is the only mode, so there's nothing to tick; the image
+   itself is configured after creation, next step.)
 
-2. **Add the hosts:** right-click the cluster → **Add Hosts** → enter
+2. **Set the cluster image to the hosts' exact ESXi build** — do this
+   after creating the cluster and BEFORE enabling Supervisor. Enable
+   pushes the cluster image (with the spherelet VIBs) onto the hosts;
+   any version mismatch fails with `Cannot download VIB` (runbook Root
+   Causes #1–2).
+
+   1. Import the offline depot matching the build the nested hosts
+      actually run (e.g. `VMware-ESXi-9.0.x-<build>-depot.zip` from
+      Broadcom support): **vSphere Client → Lifecycle Manager →
+      Import → Bundle (.zip)**.
+   2. **Cluster → Updates → Image → Edit → ESXi Version** dropdown →
+      pick that exact build → **Validate → Save**.
+   3. Target state: **"All hosts compliant."** Don't proceed until it
+      is.
+
+3. **Add the hosts:** right-click the cluster → **Add Hosts** → enter
    `192.168.1.241/.242/.243` with each host's `root` password → accept
    the thumbprints. If a host lands in maintenance mode, right-click →
-   Maintenance Mode → Exit.
+   Maintenance Mode → Exit. (Order note: adding hosts before or after
+   setting the image both work — compliance is evaluated once both
+   exist.)
 
-3. **HA advanced options** (silences recurring HA alarms in a nested,
+4. **HA advanced options** (silences recurring HA alarms in a nested,
    single-datastore lab — set via Cluster → Configure → vSphere
    Availability → Edit → Advanced Options):
 
