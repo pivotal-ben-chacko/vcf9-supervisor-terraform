@@ -106,6 +106,44 @@ All paths relative to the repo root
 (`~/Repos/vcf9-supervisor-terraform`); the example lives in
 `examples/lab2/`.
 
+> ### How to SSH into an ESXi host (step 0 needs this)
+>
+> **Account:** always the user `root`, with the ESXi **root password
+> chosen when the host was installed** (this is a per-host password —
+> not a vCenter/SSO login, and not the `secrets.auto.tfvars`
+> passwords).
+>
+> **SSH is disabled by default on ESXi.** Enable it first, any one of
+> these ways:
+>
+> - **vSphere Client:** select the host → Configure → System →
+>   Services → SSH → Start.
+> - **ESXi Host Client:** browse to `https://<host-ip>/ui`, log in as
+>   root → Manage → Services → `TSM-SSH` → Start.
+> - **DCUI** (the yellow console screen on the VM): F2 → log in →
+>   Troubleshooting Options → Enable SSH.
+> - **govc** (from this machine, pointed at the lab-2 vCenter):
+>   `GOVC_HOST=/<datacenter>/host/<cluster>/<host-ip> govc host.service start TSM-SSH`
+>
+> **Running a command over SSH** — either interactively:
+>
+> ```bash
+> ssh root@192.168.1.241        # type the root password when prompted
+> esxcli system hostname get    # you're now in the ESXi shell
+> exit
+> ```
+>
+> or one-shot without opening a shell (this is the form the commands
+> below use — everything inside the quotes runs on the host):
+>
+> ```bash
+> ssh root@192.168.1.241 'esxcli system hostname get'
+> ```
+>
+> When done, stop SSH again from the same menu (or
+> `govc host.service stop TSM-SSH`) — leaving it on triggers a
+> persistent yellow warning on the host and is poor hygiene.
+
 ```bash
 # 0. FIRST: verify each nested host has a unique hostname — ESXi
 #    installs default to "localhost", which silently breaks spherelet
