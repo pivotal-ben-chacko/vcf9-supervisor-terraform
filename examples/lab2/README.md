@@ -48,20 +48,12 @@ Secrets go in `secrets.auto.tfvars` (never committed — see step 3).
 
 **On the nested ESXi hosts (do this FIRST):**
 
-- [ ] **Set a unique hostname on each host.** ESXi defaults to
-  `localhost`; with that, every spherelet receives the same client-cert
-  identity (`system:node:localhost`) and Kubernetes blocks node
-  registration — the cluster comes up with zero worker nodes. See
-  `TROUBLESHOOTING.md` → "Supervisor ESXi nodes never join".
-
-  ```bash
-  # on each host (SSH or DCUI), incrementing the name:
-  esxcli system hostname set --host=nested-esxi-1 --domain=<lab2-domain>
-  ```
-
-  If spherelet ever ran on them while named `localhost`, also clear
-  `/etc/vmware/spherelet/*.crt|*.key|*.pem` and restart spherelet after
-  enable (full recipe in TROUBLESHOOTING.md).
+- [ ] **Set a unique hostname on each host** — see §2a below for the
+  exact commands. ESXi defaults to `localhost`; with that, every
+  spherelet receives the same client-cert identity
+  (`system:node:localhost`) and Kubernetes blocks node registration —
+  the cluster comes up with zero worker nodes. See `TROUBLESHOOTING.md`
+  → "Supervisor ESXi nodes never join".
 - [ ] Each host has **three vNICs**: vmnic0 + vmnic1 on the outer
   `VM Network`, vmnic2 on the outer `outer-mgmt-net` path. ESXi does
   not detect hot-added NICs — power-cycle after adding.
@@ -110,6 +102,67 @@ Secrets go in `secrets.auto.tfvars` (never committed — see step 3).
 
 - [ ] `make -C ../.. install-deps` — terraform, govc, python3+pyvmomi,
   curl, jq, openssl.
+
+---
+
+## 2a. Setting the ESXi hostnames (required — do before Terraform)
+
+**What to set:** the recommended values for this lab are
+
+| Host | `--host` | `--domain` |
+|---|---|---|
+| 192.168.1.241 | `nested-esxi-1` | `lab2.skynetsystems.io` |
+| 192.168.1.242 | `nested-esxi-2` | `lab2.skynetsystems.io` |
+| 192.168.1.243 | `nested-esxi-3` | `lab2.skynetsystems.io` |
+
+The actual strings are your choice — the rules that matter:
+
+- **Unique per host** (the whole point — `localhost` on all three is
+  the failure mode).
+- **Lowercase letters, digits, hyphens, dots only** — the FQDN becomes
+  the Kubernetes node name, which must be DNS-1123 compliant (no
+  underscores, no uppercase).
+- **Stable** — spherelet's cert identity is minted from it; renaming
+  later means re-issuing spherelet certs.
+- **Avoid `.local`** as the domain (mDNS conflicts, especially from
+  macOS).
+- No DNS records are required for these names; the domain is
+  effectively a label.
+
+Pick whichever method fits:
+
+**Helper script** (from the repo root; checks first, sets only when
+wrong, safe to re-run — needs SSH enabled on the hosts, see the SSH
+primer in §3):
+
+```bash
+cd ~/Repos/vcf9-supervisor-terraform
+SSHPASS='<esxi root password>' ./scripts/sv-set-hostnames -d <lab2-domain> \
+  192.168.1.241=nested-esxi-1 \
+  192.168.1.242=nested-esxi-2 \
+  192.168.1.243=nested-esxi-3
+```
+
+**Manual over SSH**, one host at a time:
+
+```bash
+ssh root@192.168.1.241 'esxcli system hostname set --host=nested-esxi-1 --domain=<lab2-domain>'
+ssh root@192.168.1.241 'esxcli system hostname get'   # verify
+```
+
+**ESXi Host Client (no SSH needed):** browse to
+`https://<host-ip>/ui`, log in as root → **Networking → TCP/IP stacks
+→ Default TCP/IP stack → Edit settings** → set Host name + Domain.
+
+**DCUI (VM console):** F2 → log in → **Configure Management Network →
+DNS Configuration** → set Hostname.
+
+Setting the hostname does **not** rename the host in vCenter inventory
+(that stays the IP it was added with) and does not disrupt the host.
+
+If spherelet ever ran on a host while it was named `localhost`, also
+clear `/etc/vmware/spherelet/*.crt|*.key|*.pem` on it and restart
+spherelet after Supervisor enable (full recipe in TROUBLESHOOTING.md).
 
 ---
 
