@@ -49,9 +49,14 @@ Secrets go in `secrets.auto.tfvars` (never committed — see step 3).
 **On the nested ESXi hosts (do this FIRST):**
 
 - [ ] **Each nested ESXi VM exposes hardware virtualization (VHV).**
-  Edit Settings → CPU → check **"Expose hardware assisted
-  virtualization to the guest OS"** (VM must be powered off; or
-  `govc vm.change -vm <vm-path> -nested-hv-enabled=true`). Without it
+  Edit Settings → expand the **CPU** row (caret on the left) → check
+  **"Hardware virtualization: Expose hardware assisted virtualization
+  to the guest OS"**. VM must be powered off (the row hides/greys
+  while running). If the checkbox isn't there, set the flag directly:
+  `govc vm.change -vm <vm-path> -nested-hv-enabled=true`, or VM
+  Options → Advanced → Configuration Parameters → add
+  `vhv.enable = TRUE`. Verify from inside the host:
+  `esxcli hardware cpu global get` → **HV Support: 3**. Without it
   the host boots and joins vCenter normally, but **every VM it tries
   to power on fails** with *"This host does not support Intel VT-x
   ... VHV disabled"* — first the vCLS VMs, later the Supervisor

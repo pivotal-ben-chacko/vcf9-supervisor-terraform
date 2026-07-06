@@ -918,6 +918,73 @@ ssh root@192.168.2.231 'kubectl get nodes'    # 3 masters + 3 agents, all Ready
 
 ---
 
+## vCenter→CP traffic dropped by rp_filter (second variant, hit in lab 2)
+
+**Symptom (hit 2026-07-06, lab 2):** Supervisor enables, but system pods
+crashloop for over an hour:
+
+- `vsphere-csi-controller` at 2/7 with 100+ restarts, logging
+  `could not find any AvailabilityZone`
+- `vmware-system-vmop` crashlooping with
+  `no matches for kind "CnsNodeVmAttachment" in version "cns.vmware.com/v1alpha1"`
+- `kubectl get availabilityzones.topology.tanzu.vmware.com` → nothing,
+  even though the vSphere Zone (Configure → vSphere Zones) exists and
+  is associated with the cluster
+- The tell, in `/storage/log/vmware/wcp/wcpsvc.log` on the vCSA:
+
+  ```
+  unable to get k8s version from agency ...:
+    Get "http://localhost:1080/external-cert/http1/<cp-mgmt-ip>/6443/version":
+    context deadline exceeded
+  ```
+
+**Cause:** same strict-rp_filter drop as the spherelet case above, but
+the victim is **vCenter itself**. Lab 2's vCSA lives on the *workload*
+subnet (192.168.1.80). Its connections to the CP VMs' management IPs
+arrive on CP **eth0**, but the CP's route back to the vCSA points at
+**eth1** (directly connected to the workload subnet) — strict
+`rp_filter=1` silently drops every vCenter-initiated packet. CP-initiated
+traffic (CSI→vCenter login, etc.) is symmetric and works, which makes
+the failure look baffling: half the integration works, half times out.
+WCP therefore can't write the `AvailabilityZone` CR into the cluster;
+CSI can't start without it; the CNS CRDs never register; vmop starves.
+
+Lab 1 never hit this variant because its vCSA sits on the *management*
+subnet — same side as CP eth0, symmetric. General law: **any machine
+that talks to a CP VM address on one subnet, while the CP's route back
+to it points out the other NIC, is silently dropped under strict
+rp_filter.** In lab 1 that was the ESXi hosts (fixed durably with
+management vmks); in lab 2 it's the vCSA.
+
+**Fix** — loose rp_filter on all CP VMs (root password via
+`decryptK8Pwd.py` on the vCSA):
+
+```bash
+for ip in <cp-vm-ips>; do
+  ssh root@$ip 'sysctl -w net.ipv4.conf.all.rp_filter=2 \
+                          -w net.ipv4.conf.eth0.rp_filter=2'
+done
+```
+
+**Verify** — from the vCSA shell, the exact call WCP makes:
+
+```bash
+curl -sk --max-time 5 https://<cp-mgmt-ip>:6443/version   # instant JSON = fixed
+```
+
+Recovery is then automatic (WCP retries continuously): the
+`AvailabilityZone` CR appears within minutes, CSI reaches 7/7 on its
+next backoff restart (`kubectl -n vmware-system-csi rollout restart
+deploy/vsphere-csi-controller` to skip the wait), the `cns.vmware.com`
+CRDs register, and the crashloop pods drain.
+
+> ⚠️ Same volatility as the spherelet case: the sysctl reverts when
+> vSphere redeploys the CP VMs. A durable alternative for this variant
+> would be a second vCSA NIC on the management subnet; there is no
+> Terraform-side fix because the asymmetry is on the vCSA↔CP path.
+
+---
+
 ## Diagnostic command cheatsheet
 
 ```sh
