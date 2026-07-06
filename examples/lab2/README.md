@@ -65,6 +65,14 @@ Secrets go in `secrets.auto.tfvars` (never committed — see step 3).
 - [ ] Each host has **three vNICs**: vmnic0 + vmnic1 on the outer
   `VM Network`, vmnic2 on the outer `outer-mgmt-net` path. ESXi does
   not detect hot-added NICs — power-cycle after adding.
+- [ ] Expected host networking at this stage (naming trap): the host's
+  own **"Management Network"** (`vmk0` on `vSwitch0`/vmnic0) lives on
+  the **workload** CIDR — `192.168.1.24x` — because that's the host's
+  address. The `192.168.2.0/24` "management" subnet is management for
+  the *Supervisor control plane*, not the hosts; the host only gets a
+  leg on it when Terraform adds `vmk1` (sup-host-mgmt). Leave `vmk0`
+  where it is, and leave vmnic1/vmnic2 unattached — the DVS claims
+  them.
 - [ ] All three hosts joined to the Supervisor cluster and `connected`.
 - [ ] Cluster vLCM image matches the installed ESXi build (vSphere UI →
   Cluster → Updates → Image → "All hosts compliant"). Mismatch fails
