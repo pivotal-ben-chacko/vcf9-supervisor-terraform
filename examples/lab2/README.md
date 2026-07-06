@@ -144,10 +144,24 @@ cluster.
 
 3. **Add the hosts:** right-click the cluster → **Add Hosts** → enter
    `192.168.1.241/.242/.243` with each host's `root` password → accept
-   the thumbprints. If a host lands in maintenance mode, right-click →
-   Maintenance Mode → Exit. (Order note: adding hosts before or after
-   setting the image both work — compliance is evaluated once both
-   exist.)
+   the thumbprints. (Order note: adding hosts before or after setting
+   the image both work — compliance is evaluated once both exist.)
+
+   **The wizard leaves the hosts in maintenance mode — this is
+   expected.** Exit it on each host (right-click → Maintenance Mode →
+   Exit, or):
+
+   ```bash
+   for h in 192.168.1.241 192.168.1.242 192.168.1.243; do
+     govc host.maintenance.exit /Datacenter/host/Supervisor-Cluster/$h
+   done
+   ```
+
+   Within ~60 s of leaving maintenance mode, vSphere auto-deploys two
+   small **vCLS** VMs on the cluster — normal, DRS needs them, leave
+   them alone. HA datastore/network alarms at this stage are also
+   expected until step 4's advanced options are set and Terraform
+   mounts `nfs-shared`.
 
 4. **HA advanced options** (silences recurring HA alarms in a nested,
    single-datastore lab — set via Cluster → Configure → vSphere
