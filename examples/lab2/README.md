@@ -452,7 +452,52 @@ policy.
 
 ---
 
-## 4. After apply — verify
+## 4. Logging in with kubectl
+
+**Find the API endpoint** — one of the VIP-pool addresses
+(`192.168.1.249–254`), chosen at enable time:
+
+```bash
+terraform output supervisor_api_vip          # from examples/lab2
+```
+
+(or vSphere Client → Workload Management → Supervisors → "Control
+Plane Node Address"; or probe: the address in .249–.254 that answers
+`curl -sk https://<ip>:6443/version` with JSON.)
+
+**Install kubectl + the vSphere plugin** (one-time per workstation;
+`darwin-amd64` on macOS, `linux-amd64` on Linux):
+
+```bash
+curl -kLo /tmp/plugin.zip https://<api-vip>/wcp/plugin/darwin-amd64/vsphere-plugin.zip
+unzip -d /tmp/plugin /tmp/plugin.zip
+sudo install -m 0755 /tmp/plugin/bin/kubectl         /usr/local/bin/
+sudo install -m 0755 /tmp/plugin/bin/kubectl-vsphere /usr/local/bin/
+```
+
+**Log in** — username is your vSphere SSO user (the same
+`administrator@vsphere.local` + password Terraform uses):
+
+```bash
+kubectl vsphere login --server=<api-vip> \
+  --insecure-skip-tls-verify \
+  --vsphere-username=administrator@vsphere.local
+
+kubectl config use-context <api-vip>
+kubectl get nodes                # 3 control-plane + 3 agent, all Ready
+```
+
+To run workloads you need a **vSphere Namespace** first (Workload
+Management → Namespaces → New Namespace → assign your storage policy),
+then `kubectl config use-context <namespace-name>`.
+
+**Breakglass alternative** (no load balancer needed — for debugging
+system components): SSH to a CP VM as `root`, password from
+`/usr/lib/vmware-wcp/decryptK8Pwd.py` on the vCSA; `kubectl` works
+there directly. The password rotates on every re-enable/CP redeploy —
+always re-fetch it.
+
+## 5. After apply — verify
 
 ```bash
 # All 4-6 nodes Ready (3 CP + your 3 ESXi agents). CP root password:
