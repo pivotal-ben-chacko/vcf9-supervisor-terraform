@@ -798,6 +798,8 @@ GOVC_HOST=/Datacenter/host/Supervisor-Cluster/192.168.3.241 \
 
 ### Cause 1 — CP VM rp_filter drops spherelet traffic (asymmetric reverse path)
 
+*(Mechanism explained from first principles in `RPFILTER-EXPLAINED.md`.)*
+
 With control-plane HA (3 CP VMs), WCP points spherelet at the **floating
 management IP** (`192.168.2.231`) instead of the workload-side HAProxy
 VIP it uses with HA off. Spherelet packets from the ESXi hosts
@@ -939,7 +941,7 @@ crashloop for over an hour:
   ```
 
 **Cause:** same strict-rp_filter drop as the spherelet case above, but
-the victim is **vCenter itself**. Lab 2's vCSA lives on the *workload*
+the victim is **vCenter itself** (mechanism: `RPFILTER-EXPLAINED.md`). Lab 2's vCSA lives on the *workload*
 subnet (192.168.1.80). Its connections to the CP VMs' management IPs
 arrive on CP **eth0**, but the CP's route back to the vCSA points at
 **eth1** (directly connected to the workload subnet) — strict
