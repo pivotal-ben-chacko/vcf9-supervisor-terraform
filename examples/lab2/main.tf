@@ -187,7 +187,14 @@ variable "outer_datastore" {
   default = "datastore1" # CHANGE-ME: datastore on the physical host for HAProxy/NFS VMs
 }
 
-# ── Management network: outer-mgmt-net = 192.168.2.0/24 ──
+# ── Supervisor CONTROL-PLANE management network ──
+# (outer-mgmt-net = 192.168.2.0/24)
+#
+# "Management" here is the Supervisor wizard's term: this subnet is
+# where the Supervisor control-plane VMs put eth0 (vCenter/DNS traffic)
+# and where Terraform adds each host's vmk1 for spherelet. It is NOT
+# the ESXi hosts' own "Management Network" (vmk0) — that stays on the
+# workload subnet (192.168.1.24x) and these values never touch it.
 variable "management_subnet" {
   type    = string
   default = "192.168.2.0/24"
