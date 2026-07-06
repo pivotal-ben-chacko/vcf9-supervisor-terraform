@@ -105,6 +105,79 @@ Secrets go in `secrets.auto.tfvars` (never committed — see step 3).
 
 ---
 
+## 2b. Creating the Supervisor cluster (manual — Terraform won't do this)
+
+Settings below are the lab-1 working configuration, read live from its
+cluster.
+
+### Via the vSphere Client
+
+1. **Create the cluster:** right-click the datacenter → **New Cluster**
+   → name it `Supervisor-Cluster` (or whatever you set
+   `supervisor_cluster` to), with:
+
+   | Setting | Value | Why |
+   |---|---|---|
+   | vSphere DRS | **On**, automation level **Fully Automated** | Supervisor requires DRS to place CP/pod VMs |
+   | vSphere HA | **On** (admission control on) | Supervisor requires HA |
+   | vSAN | **Off** | we use the NFS datastore instead |
+   | "Manage all hosts with a single image" (vLCM) | **On**, image = **the exact ESXi version the nested hosts run** | Supervisor enable pushes the cluster image to hosts; a mismatched image fails with `Cannot download VIB` (runbook Root Causes #1–2) |
+
+   If the hosts' ESXi version isn't offered in the image dropdown,
+   first import the matching offline depot: **Lifecycle Manager →
+   Actions → Import Updates**, then Cluster → Updates → Image → Edit.
+   Target state: **"All hosts compliant."**
+
+2. **Add the hosts:** right-click the cluster → **Add Hosts** → enter
+   `192.168.1.241/.242/.243` with each host's `root` password → accept
+   the thumbprints. If a host lands in maintenance mode, right-click →
+   Maintenance Mode → Exit.
+
+3. **HA advanced options** (silences recurring HA alarms in a nested,
+   single-datastore lab — set via Cluster → Configure → vSphere
+   Availability → Edit → Advanced Options):
+
+   | Option | Value | Why |
+   |---|---|---|
+   | `das.ignoreInsufficientHbDatastore` | `true` | HA wants ≥2 heartbeat datastores; nested hosts will only ever see `nfs-shared` |
+   | `das.ignoreRedundantNetWarning` | `true` | HA wants redundant management NICs; the nested hosts have one path |
+
+   (See `TROUBLESHOOTING.md` → "HA alarm spam" for a pyvmomi snippet
+   that sets these from the CLI — govc doesn't expose them.)
+
+### Or via govc
+
+```bash
+# Point govc at the lab-2 vCenter:
+export GOVC_URL=<lab2-vcenter-fqdn> GOVC_USERNAME=administrator@vsphere.local \
+       GOVC_PASSWORD='<sso password>' GOVC_INSECURE=true
+
+govc cluster.create -dc=Datacenter Supervisor-Cluster
+
+govc cluster.change -drs-enabled -drs-mode=fullyAutomated -ha-enabled \
+  /Datacenter/host/Supervisor-Cluster
+
+for h in 192.168.1.241 192.168.1.242 192.168.1.243; do
+  govc cluster.add -cluster=Supervisor-Cluster \
+    -hostname=$h -username=root -password='<esxi root pw>' -noverify
+done
+
+# If any host was added in maintenance mode:
+govc host.maintenance.exit /Datacenter/host/Supervisor-Cluster/192.168.1.241
+
+# Verify: all three connected
+govc find /Datacenter/host/Supervisor-Cluster -type h
+```
+
+The vLCM image assignment and the two HA advanced options still need
+the UI / pyvmomi as noted above.
+
+**Don't** configure networking on the cluster beyond this — the
+`supervisor-dvs`, port groups, uplinks, and vmkernel NICs are all
+Terraform's job.
+
+---
+
 ## 3. Commands to run (in order)
 
 All paths relative to the repo root
